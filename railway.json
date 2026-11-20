@@ -1,0 +1,16 @@
+{
+    "$schema": "https://railway.com/railway.schema.json",
+    "build": {
+        "builder": "DOCKERFILE",
+        "dockerfilePath": "Dockerfile"
+    },
+    "deploy": {
+        "preDeployCommand": [
+            "php artisan migrate --force && php artisan dentiflow:provision-admins"
+        ],
+        "healthcheckPath": "/login",
+        "healthcheckTimeout": 120,
+        "restartPolicyType": "ON_FAILURE",
+        "restartPolicyMaxRetries": 3
+    }
+}

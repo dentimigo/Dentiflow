@@ -1,0 +1,120 @@
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../**/*.blade.php';
+@source '../**/*.js';
+
+@theme {
+    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+        'Segoe UI Symbol', 'Noto Color Emoji';
+}
+
+@layer base {
+    html {
+        overflow-wrap: anywhere;
+    }
+
+    input,
+    select,
+    textarea,
+    button {
+        max-width: 100%;
+    }
+
+    dialog {
+        max-height: calc(100dvh - 1rem);
+        max-width: calc(100vw - 1rem);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+    }
+}
+
+@layer components {
+    #main-content > div,
+    #main-content section,
+    #main-content article,
+    #main-content form,
+    #main-content header,
+    #main-content div {
+        min-width: 0;
+    }
+
+    #main-content .overflow-x-auto {
+        overscroll-behavior-inline: contain;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+    }
+}
+
+@media (max-width: 639px) {
+    #content-shell > header {
+        min-height: 4rem;
+        height: 4rem;
+        padding-inline: .75rem;
+    }
+
+    #main-content h1.text-3xl,
+    #main-content h1.text-4xl {
+        font-size: 1.5rem;
+        line-height: 2rem;
+    }
+
+    #main-content h2.text-2xl {
+        font-size: 1.25rem;
+        line-height: 1.75rem;
+    }
+
+    #main-content p,
+    #main-content dd,
+    #main-content td,
+    #main-content th,
+    #main-content a,
+    #main-content button,
+    #main-content label,
+    #main-content span {
+        overflow-wrap: anywhere;
+    }
+
+    #main-content table {
+        display: table;
+        min-width: 42rem;
+    }
+
+    #main-content table.w-full:not([class*="min-w-"]) {
+        width: max-content;
+        min-width: 42rem;
+    }
+
+    #main-content :is(.overflow-x-auto, .overflow-hidden):has(> table) {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    #main-content dialog {
+        width: calc(100vw - 1rem);
+        border-radius: 1rem;
+    }
+
+    #main-content dialog > form > :is(div, header, footer) {
+        padding-inline: 1rem;
+    }
+
+    #main-content form.flex:not(.items-center),
+    #main-content header.flex:not(.items-center) {
+        align-items: stretch;
+    }
+
+    #main-content [popover] {
+        max-width: calc(100vw - 1.5rem);
+    }
+
+    #main-content .rounded-3xl {
+        border-radius: 1rem;
+    }
+
+    #main-content .p-8,
+    #main-content .sm\:p-8 {
+        padding: 1rem;
+    }
+}
