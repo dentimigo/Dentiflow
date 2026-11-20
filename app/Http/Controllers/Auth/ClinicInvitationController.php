@@ -25,13 +25,13 @@ class ClinicInvitationController extends Controller
 
             return view('auth.register', [
                 'selectedRole' => $invite->role,
-                'invitedEmail' => $invite->email,
+                'invitedEmail' => $request->user()->email,
                 'acceptClinicInvitation' => true,
                 'clinicName' => $invite->clinic_name,
             ]);
         }
 
-        if (User::where('email', $invite->email)->exists()) {
+        if ($invite->email !== null && User::where('email', $invite->email)->exists()) {
             $request->session()->put('clinic_invitation_url', $request->getRequestUri());
 
             return redirect()->route('login')->with('warning', 'Inicia sesión con el correo de la invitación para unirte al consultorio.');
@@ -52,7 +52,16 @@ class ClinicInvitationController extends Controller
         if ($user) {
             $this->verifyRecipient($user, $invite);
         } else {
-            $request->merge(['email' => $invite->email]);
+            if ($request->input('invitation_login') === '1') {
+                $request->session()->put('clinic_invitation_url', $request->getRequestUri());
+
+                return redirect()->route('login');
+            }
+
+            $email = $invite->email ?? $request->input('email');
+            if (is_string($email)) {
+                $request->merge(['email' => Str::lower(trim($email))]);
+            }
             $data = $request->validate([
                 'name' => 'required|string|max:255',
                 'email' => 'required|email|max:255|unique:users,email',
@@ -66,6 +75,9 @@ class ClinicInvitationController extends Controller
             abort_unless($workspace->hasWorkspaceAccess(), 403, 'La agenda requiere activación.');
 
             $alreadyMember = $user && $workspace->members()->whereKey($user->id)->exists();
+            if ($alreadyMember && $invite->email === null) {
+                throw ValidationException::withMessages(['invitation' => 'Esta cuenta ya pertenece al consultorio.']);
+            }
             $seatLimit = $workspace->seatLimit();
             if (! $alreadyMember && $seatLimit !== null && $workspace->members()->count() >= $seatLimit) {
                 throw ValidationException::withMessages(['invitation' => 'El consultorio alcanzó el límite de integrantes de su plan.']);
@@ -78,7 +90,7 @@ class ClinicInvitationController extends Controller
             $existingAccount = $user !== null;
             $user ??= User::create([
                 'name' => $data['name'],
-                'email' => $invite->email,
+                'email' => $data['email'],
                 'role' => 'pendiente',
                 'gender' => $data['gender'],
                 'password' => $data['password'],
@@ -145,6 +157,7 @@ class ClinicInvitationController extends Controller
 
     private function verifyRecipient(User $user, object $invite): void
     {
-        abort_unless($user->role !== 'superadmin' && Str::lower($user->email) === $invite->email, 403, 'Usa la cuenta con el correo de la invitación.');
+        abort_if($user->role === 'superadmin', 403);
+        abort_unless($invite->email === null || Str::lower($user->email) === $invite->email, 403, 'Usa la cuenta con el correo de la invitación.');
     }
 }

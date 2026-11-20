@@ -6,7 +6,6 @@ use App\Models\Dentist;
 use App\Models\ClinicWorkspace;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 class AdminUsersTest extends TestCase
@@ -17,21 +16,20 @@ class AdminUsersTest extends TestCase
     {
         $this->withSession(['access_role' => 'admin'])
             ->post(route('admin.users.invite'), [
-                'invite_email' => '  DENTISTA@example.test ',
                 'invite_role' => 'doctor',
-            ])->assertRedirect(route('admin.users'))->assertSessionHas('success');
+            ])->assertRedirect(route('admin.users'))->assertSessionHas('invite_link');
 
-        $email = Mail::getSymfonyTransport()->messages()->sole()->getOriginalMessage();
-        $this->assertSame('dentista@example.test', $email->getTo()[0]->getAddress());
-        $this->assertSame(1, preg_match('/^https?:\/\/\S+$/m', $email->getTextBody(), $matches));
-        $url = $matches[0];
+        $url = session('invite_link');
+        $whatsapp = session('invite_whatsapp');
+        $this->assertStringStartsWith('https://wa.me/?text=', $whatsapp);
+        $this->assertStringContainsString($url, rawurldecode($whatsapp));
 
         $this->flushSession();
-        $this->get($url)->assertOk()->assertSee('dentista@example.test');
+        $this->get($url)->assertOk()->assertSee('Ya tengo cuenta');
         $this->get($url.'&role=asistente')->assertForbidden();
         $registration = [
             'name' => 'Dentista Invitado',
-            'email' => 'otro@example.test',
+            'email' => 'DENTISTA@example.test',
             'role' => 'asistente',
             'gender' => 'hombre',
             'password' => 'Password123!',
@@ -75,15 +73,14 @@ class AdminUsersTest extends TestCase
         $this->actingAs($owner)->withSession(['clinic_workspace_id' => $clinic->id]);
         $this->get(route('admin.users'))->assertOk()->assertDontSee($recipient->email);
         $this->post(route('admin.users.invite'), [
-            'invite_email' => $recipient->email,
             'invite_role' => 'asistente',
         ])->assertRedirect(route('admin.users'))->assertSessionHas('invite_link');
         $url = session('invite_link');
-        $this->get($url)->assertForbidden();
+        $this->post($url)->assertSessionHasErrors('invitation');
 
         auth()->logout();
         $this->flushSession();
-        $this->get($url)->assertRedirect(route('login'));
+        $this->post($url, ['invitation_login' => '1'])->assertRedirect(route('login'));
         $this->post('/login', ['email' => $recipient->email, 'password' => 'password'])->assertRedirect($url);
         $this->get($url)->assertOk()->assertSee('Consultorio Pedrito');
         $this->post($url)->assertRedirect(route('inicio'))->assertSessionHas('clinic_workspace_id', $clinic->id);
@@ -95,17 +92,19 @@ class AdminUsersTest extends TestCase
             ->get(route('admin.users'))->assertOk()->assertSee($recipient->email);
     }
 
-    public function test_admin_can_copy_an_invitation_when_outgoing_mail_is_disabled(): void
+    public function test_admin_can_copy_a_whatsapp_invitation(): void
     {
         config(['mail.default' => 'log']);
 
         $this->withSession(['access_role' => 'admin'])
             ->post(route('admin.users.invite'), [
-                'invite_email' => 'asistente@example.test',
                 'invite_role' => 'asistente',
             ])->assertRedirect(route('admin.users'))->assertSessionHas('invite_link');
 
-        $this->get(route('admin.users'))->assertOk()->assertSee('Copia y comparte este enlace');
+        $this->get(route('admin.users'))->assertOk()
+            ->assertSee('Copia y comparte este enlace')->assertSee('Compartir por WhatsApp')
+            ->assertDontSee('invite_phone')
+            ->assertDontSee('Solicitudes pendientes');
     }
 
     public function test_admin_can_open_registered_users_section_without_create_form(): void
@@ -189,7 +188,7 @@ class AdminUsersTest extends TestCase
         ]);
     }
 
-    public function test_superadmin_sees_requested_profile_and_can_approve_it_directly(): void
+    public function test_legacy_requests_are_hidden_from_the_clinic_roster(): void
     {
         $user = User::factory()->create([
             'name' => 'Solicitud Doctora',
@@ -201,13 +200,10 @@ class AdminUsersTest extends TestCase
         $this->withSession(['access_role' => 'admin'])
             ->get(route('admin.users'))
             ->assertOk()
-            ->assertSee('Solicitudes pendientes')
-            ->assertSee('Solicitud Doctora')
-            ->assertSee('Solicitó: Doctor')
-            ->assertSee('Aprobar como Doctor');
+            ->assertDontSee('Solicitudes pendientes')
+            ->assertDontSee('Solicitud Doctora');
 
-        $this->withSession(['access_role' => 'admin'])
-            ->put(route('admin.users.approve', $user))
+        $this->put(route('admin.users.approve', $user))
             ->assertRedirect(route('admin.users'))
             ->assertSessionHas('success', 'Solicitud Doctora fue aprobado como Doctor.');
 

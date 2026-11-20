@@ -61,7 +61,7 @@
             </div>
 
             <div class="mt-8">
-                <form method="POST" action="{{ isset($invitedEmail) ? request()->fullUrl() : route('register') }}" class="rounded-[1.35rem] border border-[#ead2fb] bg-white p-6 shadow-[0_18px_60px_rgba(81,37,105,.08)]">
+                <form method="POST" action="{{ isset($clinicName) || isset($invitedEmail) ? request()->fullUrl() : route('register') }}" class="rounded-[1.35rem] border border-[#ead2fb] bg-white p-6 shadow-[0_18px_60px_rgba(81,37,105,.08)]">
                     @csrf
                     @unless($creatingClinic)
                         <input type="hidden" name="role" value="{{ $selectedRole }}">
@@ -166,6 +166,9 @@
                         </div>
 
                         <button type="submit" class="w-full rounded-xl bg-[#9700cf] py-3.5 text-sm font-bold text-white shadow-lg shadow-[#d3a2f2] transition hover:bg-[#512569]">{{ $creatingClinic ? 'Crear mi agenda' : (isset($clinicName) ? 'Crear cuenta y aceptar' : 'Enviar solicitud de acceso') }}</button>
+                        @if(isset($clinicName) && !isset($invitedEmail))
+                            <button type="submit" name="invitation_login" value="1" formnovalidate class="mt-3 w-full text-sm font-bold text-[#9700cf]">Ya tengo cuenta, iniciar sesión</button>
+                        @endif
                     </div>
                     @endif
                 </form>

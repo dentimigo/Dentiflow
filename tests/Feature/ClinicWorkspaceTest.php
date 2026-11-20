@@ -61,8 +61,8 @@ class ClinicWorkspaceTest extends TestCase
         $this->post(route('clinic.plan.start'), ['plan' => 'basico'])->assertRedirect(route('inicio'));
 
         $urls = [];
-        foreach (['primero@example.test', 'segundo@example.test'] as $email) {
-            $this->post(route('admin.users.invite'), ['invite_email' => $email, 'invite_role' => 'asistente'])
+        for ($i = 0; $i < 2; $i++) {
+            $this->post(route('admin.users.invite'), ['invite_role' => 'asistente'])
                 ->assertRedirect(route('admin.users'))->assertSessionHas('invite_link');
             $urls[] = session('invite_link');
         }
@@ -71,6 +71,7 @@ class ClinicWorkspaceTest extends TestCase
         $this->flushSession();
         $form = [
             'name' => 'Asistente de prueba',
+            'email' => 'primero@example.test',
             'gender' => 'mujer',
             'password' => 'Registro123!',
             'password_confirmation' => 'Registro123!',
@@ -78,10 +79,11 @@ class ClinicWorkspaceTest extends TestCase
         $this->post($urls[0], $form)->assertRedirect(route('inicio'));
         auth()->logout();
         $this->flushSession();
-        $this->postJson($urls[1], $form)->assertUnprocessable()->assertJsonValidationErrors('invitation');
+        $this->postJson($urls[1], array_replace($form, ['email' => 'segundo@example.test']))
+            ->assertUnprocessable()->assertJsonValidationErrors('invitation');
         $this->assertSame(2, $workspace->members()->count());
         $this->assertDatabaseMissing('users', ['email' => 'segundo@example.test']);
-        $this->assertTrue(DB::table('user_invitations')->where('email', 'segundo@example.test')->whereNull('used_at')->exists());
+        $this->assertSame(1, DB::table('user_invitations')->whereNull('used_at')->count());
     }
 
     public function test_two_public_registrations_create_separate_agendas_and_owner_sessions(): void

@@ -7,11 +7,9 @@ use App\Models\ClinicWorkspace;
 use App\Support\ClinicContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
-use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 
 class AdminUserController extends Controller
 {
@@ -28,7 +26,7 @@ class AdminUserController extends Controller
                 ->whereIn('membership.role', ['doctor', 'asistente'])
                 ->addSelect('membership.role as clinic_role');
         } else {
-            $query->whereIn('users.role', ['pendiente', 'doctor', 'asistente'])
+            $query->whereIn('users.role', ['doctor', 'asistente'])
                 ->addSelect(['clinic_role' => DB::table('clinic_workspace_members')
                     ->select('role')->whereColumn('user_id', 'users.id')
                     ->where('clinic_workspace_id', $context->legacyId())])
@@ -53,12 +51,6 @@ class AdminUserController extends Controller
             ->paginate(8)
             ->withQueryString();
 
-        $pendingUsers = $workspaceOnly ? collect() : User::query()
-            ->where('role', 'pendiente')
-            ->whereDoesntHave('clinicWorkspaces')
-            ->orderBy('created_at')
-            ->get();
-
         $summary = [
             'total' => User::count(),
             'superadmins' => User::where('role', 'superadmin')->count(),
@@ -68,7 +60,7 @@ class AdminUserController extends Controller
             'pending' => User::where('role', 'pendiente')->count(),
         ];
 
-        return view('admin.users.index', compact('users', 'pendingUsers', 'summary', 'search', 'workspaceOnly'));
+        return view('admin.users.index', compact('users', 'summary', 'search', 'workspaceOnly'));
     }
 
     public function edit(User $user)
@@ -81,72 +73,35 @@ class AdminUserController extends Controller
 
     public function invite(Request $request)
     {
-        $email = $request->input('invite_email');
-        if (is_string($email)) {
-            $request->merge(['invite_email' => Str::lower(trim($email))]);
-        }
-
         $data = $request->validate([
-            'invite_email' => ['required', 'email', 'max:255'],
             'invite_role' => ['required', Rule::in(['doctor', 'asistente'])],
         ], [
-            'invite_email.required' => 'Escribe el correo de la persona que quieres invitar.',
-            'invite_email.email' => 'Escribe un correo electrónico válido.',
             'invite_role.required' => 'Selecciona Dentista o Asistente.',
             'invite_role.in' => 'Selecciona Dentista o Asistente.',
         ]);
 
-        $role = $data['invite_role'] === 'doctor' ? 'Dentista' : 'Asistente';
-        $invitationId = (string) Str::uuid();
-        $workspaceId = app(ClinicContext::class)->id();
-        $workspace = ClinicWorkspace::findOrFail($workspaceId);
+        $workspace = ClinicWorkspace::findOrFail(app(ClinicContext::class)->id());
         $seatLimit = $workspace->seatLimit();
         if ($seatLimit !== null && $workspace->members()->count() >= $seatLimit) {
-            return back()->withInput()->withErrors(['invite_email' => 'Tu agenda alcanzó el límite de integrantes del plan.']);
+            return back()->withInput()->withErrors(['invite_role' => 'Tu agenda alcanzó el límite de integrantes del plan.']);
         }
 
-        $alreadyMember = User::where('email', $data['invite_email'])
-            ->whereHas('clinicWorkspaces', fn ($workspaces) => $workspaces->whereKey($workspaceId))
-            ->exists();
-        if ($alreadyMember) {
-            return back()->withInput()->withErrors(['invite_email' => 'Esta persona ya pertenece a tu consultorio.']);
-        }
-
+        $invitationId = (string) Str::uuid();
         DB::table('user_invitations')->insert([
             'id' => $invitationId,
-            'clinic_workspace_id' => $workspaceId,
-            'email' => $data['invite_email'],
+            'clinic_workspace_id' => $workspace->id,
             'role' => $data['invite_role'],
         ]);
         $url = URL::temporarySignedRoute('register.invitation', now()->addDays(3), [
             'invitation' => $invitationId,
         ]);
+        $role = $data['invite_role'] === 'doctor' ? 'Dentista' : 'Asistente';
+        $message = "Te invito a {$workspace->name} en DentiFlow como {$role}. Usa este enlace dentro de 3 días: {$url}";
 
-        $mailer = config('mail.default');
-        $transport = config("mail.mailers.{$mailer}.transport");
-        if (in_array($transport, ['log', 'null'], true)) {
-            return redirect()->route('admin.users')->with('invite_link', $url);
-        }
-
-        try {
-            $sent = Mail::raw(
-                "Te invitaron a un consultorio de DentiFlow con el rol de {$role}.\n\n"
-                ."Acepta la invitación aquí:\n{$url}\n\n"
-                ."El enlace vence en 3 días y se puede usar una sola vez.",
-                fn ($message) => $message->to($data['invite_email'])->subject('Invitación a DentiFlow'),
-            );
-        } catch (TransportExceptionInterface $exception) {
-            report($exception);
-
-            return back()->with('invite_link', $url)->withErrors(['invite_email' => 'El servicio de correo no pudo enviar la invitación. Comparte el enlace.']);
-        }
-
-        if (! $sent) {
-            return back()->with('invite_link', $url)->withErrors(['invite_email' => 'No se pudo enviar la invitación. Comparte el enlace.']);
-        }
-
-        return redirect()->route('admin.users')->with('invite_link', $url)
-            ->with('success', 'Invitación enviada a '.$data['invite_email'].'.');
+        return redirect()->route('admin.users')->with([
+            'invite_link' => $url,
+            'invite_whatsapp' => 'https://wa.me/?text='.rawurlencode($message),
+        ]);
     }
 
     public function update(Request $request, User $user)
