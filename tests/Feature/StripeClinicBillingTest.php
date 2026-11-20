@@ -7,13 +7,15 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class StripeClinicBillingTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_signed_stripe_confirmation_controls_the_trial_and_paid_access(): void
+    #[DataProvider('plans')]
+    public function test_signed_stripe_confirmation_controls_the_trial_and_paid_access(string $plan, int $amount): void
     {
         config([
             'stripe.enabled' => true,
@@ -24,9 +26,9 @@ class StripeClinicBillingTest extends TestCase
         $owner = User::factory()->create();
         $clinic = ClinicWorkspace::createForOwner($owner, 'Consultorio Stripe', trialRequired: true);
         $price = [
-            'id' => config('stripe.prices.basico'),
+            'id' => config("stripe.prices.{$plan}"),
             'currency' => 'mxn',
-            'unit_amount' => 19900,
+            'unit_amount' => $amount,
             'livemode' => false,
             'recurring' => ['interval' => 'month', 'interval_count' => 1],
         ];
@@ -47,7 +49,7 @@ class StripeClinicBillingTest extends TestCase
             'status' => 'complete',
             'livemode' => false,
             'customer' => 'cus_Example',
-            'metadata' => ['plan' => 'basico'],
+            'metadata' => ['plan' => $plan],
             'setup_intent' => [
                 'status' => 'succeeded',
                 'payment_method' => [
@@ -70,12 +72,12 @@ class StripeClinicBillingTest extends TestCase
             'api.stripe.com/v1/checkout/sessions/cs_test_Debit*' => Http::response($debitSetup),
             'api.stripe.com/v1/subscriptions' => Http::response($subscription),
             'api.stripe.com/v1/subscriptions/*' => Http::sequence()
-                ->push(array_replace($subscription, ['status' => 'active', 'latest_invoice' => ['status' => 'paid', 'amount_paid' => 19900]]))
+                ->push(array_replace($subscription, ['status' => 'active', 'latest_invoice' => ['status' => 'paid', 'amount_paid' => $amount]]))
                 ->push(array_replace($subscription, ['status' => 'past_due'])),
         ]);
 
         $this->actingAs($owner)->withSession(['clinic_workspace_id' => $clinic->id]);
-        $this->post(route('clinic.plan.start'), ['plan' => 'basico'])
+        $this->post(route('clinic.plan.start'), ['plan' => $plan])
             ->assertRedirect('https://checkout.stripe.com/c/pay/cs_test_Credit');
         Http::assertSent(fn (Request $request) => $request->url() === 'https://api.stripe.com/v1/checkout/sessions'
             && $request['mode'] === 'setup'
@@ -91,7 +93,7 @@ class StripeClinicBillingTest extends TestCase
         $this->get(route('clinic.plan'))->assertOk()->assertSee('Stripe no pudo confirmar');
         Http::assertNotSent(fn (Request $request) => $request->url() === 'https://api.stripe.com/v1/subscriptions');
 
-        $this->post(route('clinic.plan.start'), ['plan' => 'basico'])
+        $this->post(route('clinic.plan.start'), ['plan' => $plan])
             ->assertRedirect('https://checkout.stripe.com/c/pay/cs_test_Debit');
         $checkout['id'] = 'cs_test_Debit';
         $this->event('checkout.session.completed', $checkout)->assertNoContent();
@@ -107,6 +109,14 @@ class StripeClinicBillingTest extends TestCase
         $this->assertTrue($clinic->fresh()->hasWorkspaceAccess());
         $this->event('invoice.payment_failed', ['parent' => ['subscription_details' => ['subscription' => 'sub_Example']]])->assertNoContent();
         $this->get(route('reportes.export'))->assertRedirect(route('clinic.plan'));
+    }
+
+    public static function plans(): array
+    {
+        return [
+            'Básico' => ['basico', 19900],
+            'Consultorio' => ['consultorio', 49900],
+        ];
     }
 
     private function event(string $type, array $object, bool $valid = true)

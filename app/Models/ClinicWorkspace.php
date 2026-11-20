@@ -11,7 +11,7 @@ class ClinicWorkspace extends Model
 {
     public const TRIAL_PLANS = [
         'basico' => ['name' => 'Básico', 'price' => 199, 'seats' => 2],
-        'consultorio' => ['name' => 'Consultorio', 'price' => 449, 'seats' => 8],
+        'consultorio' => ['name' => 'Consultorio', 'price' => 499, 'seats' => 8],
     ];
 
     protected $fillable = ['name', 'owner_user_id'];
