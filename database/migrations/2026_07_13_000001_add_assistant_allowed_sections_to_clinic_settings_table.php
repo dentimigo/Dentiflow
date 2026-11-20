@@ -3,6 +3,7 @@
 use App\Models\ClinicSetting;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -13,7 +14,7 @@ return new class extends Migration
             $table->text('assistant_allowed_sections')->nullable()->after('administrative_audit_enabled');
         });
 
-        ClinicSetting::query()->update([
+        DB::table('clinic_settings')->update([
             'assistant_allowed_sections' => json_encode(ClinicSetting::DEFAULTS['assistant_allowed_sections']),
         ]);
     }

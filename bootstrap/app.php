@@ -12,6 +12,10 @@ return Application::configure(basePath: dirname(__DIR__))
         web: __DIR__.'/../routes/web.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
+        then: function () {
+            \Illuminate\Support\Facades\Route::post('/stripe/webhook', \App\Http\Controllers\StripeWebhookController::class)
+                ->name('stripe.webhook');
+        },
     )
     ->withMiddleware(function (Middleware $middleware): void {
         // Railway termina HTTPS en su proxy y reenvía la petición a Laravel.
@@ -19,8 +23,13 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->trustProxies(at: '*');
 
         $middleware->web(append: [
+            \App\Http\Middleware\ResolveClinicWorkspace::class,
             \App\Http\Middleware\EnsureRoleAccess::class,
         ]);
+        $middleware->prependToPriorityList(
+            \Illuminate\Routing\Middleware\SubstituteBindings::class,
+            \App\Http\Middleware\ResolveClinicWorkspace::class,
+        );
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->render(function (TokenMismatchException $exception, Request $request) {

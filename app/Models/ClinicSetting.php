@@ -2,10 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToClinic;
+use App\Support\ClinicContext;
 use Illuminate\Database\Eloquent\Model;
 
 class ClinicSetting extends Model
 {
+    use BelongsToClinic;
+
     public const DEFAULTS = [
         'clinic_name' => 'Clinica DentiFlow',
         'support_email' => 'soporte@dentiflow.com',
@@ -102,7 +106,10 @@ class ClinicSetting extends Model
 
     public static function current(): self
     {
-        return self::query()->first() ?? new self(self::DEFAULTS);
+        return self::query()->first() ?? new self([
+            ...self::DEFAULTS,
+            'clinic_name' => app(ClinicContext::class)->workspaceName ?? self::DEFAULTS['clinic_name'],
+        ]);
     }
 
     public function assistantAllowedSections(): array

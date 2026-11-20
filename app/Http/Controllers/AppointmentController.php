@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\ClinicContext;
+
 use App\Models\Appointment;
 use App\Models\CalendarBlock;
 use App\Models\ClinicSetting;
@@ -247,14 +249,14 @@ class AppointmentController extends Controller
             ],
             'nuevo_paciente_nombre' => 'required_if:paciente,'.self::QUICK_PATIENT_OPTION.'|nullable|string|max:255|regex:/^[\pL\s]+$/u',
             'nuevo_paciente_telefono' => 'required_if:paciente,'.self::QUICK_PATIENT_OPTION.'|nullable|digits:10',
-            'dentista' => $currentDentist ? 'nullable' : 'required|string|exists:dentists,nombre',
+            'dentista' => $currentDentist ? 'nullable' : ['required', 'string', app(ClinicContext::class)->exists('dentists', 'nombre')],
             'fecha' => 'required|date|after_or_equal:today',
             'hora' => 'required|date_format:H:i',
             'hora_fin' => 'nullable|date_format:H:i',
             'tipo' => 'required|string|max:255',
             'tratamiento_emergencia' => 'nullable|string|max:255',
             'costo_emergencia' => 'nullable|numeric|min:0',
-            'collaborator_dentist_id' => 'nullable|integer|exists:dentists,id',
+            'collaborator_dentist_id' => ['nullable', 'integer', app(ClinicContext::class)->exists('dentists', 'id')],
         ], $this->appointmentValidationMessages(), $this->appointmentValidationAttributes());
 
         $treatmentName = $this->resolveAppointmentTreatmentName($data['tipo'], $data['tratamiento_emergencia'] ?? null, $data['costo_emergencia'] ?? null);
@@ -368,19 +370,19 @@ class AppointmentController extends Controller
             || Treatment::where('appointment_id', $appointment->id)->where('estado', 'Realizado')->exists();
 
         $data = $request->validate([
-            'paciente' => 'required|string|exists:patients,nombre',
-            'dentista' => $currentDentist ? 'nullable' : 'required|string|exists:dentists,nombre',
+            'paciente' => ['required', 'string', app(ClinicContext::class)->exists('patients', 'nombre')],
+            'dentista' => $currentDentist ? 'nullable' : ['required', 'string', app(ClinicContext::class)->exists('dentists', 'nombre')],
             'fecha' => $isHistorical ? 'required|date' : 'required|date|after_or_equal:today',
             'hora' => 'required|date_format:H:i',
             'hora_fin' => 'nullable|date_format:H:i',
-            'tipo' => 'required|string|exists:treatments,tratamiento',
+            'tipo' => ['required', 'string', app(ClinicContext::class)->exists('treatments', 'tratamiento')],
             'estado' => 'required|string|in:'.implode(',', self::VALID_STATUSES),
             'descuento' => 'nullable|numeric|min:0|max:100',
             'procedimiento_extra' => 'nullable',
             'procedimiento_extra.*' => 'nullable|string|max:255',
             'costo_extra' => 'nullable',
             'costo_extra.*' => 'nullable|numeric|min:0',
-            'collaborator_dentist_id' => 'nullable|integer|exists:dentists,id',
+            'collaborator_dentist_id' => ['nullable', 'integer', app(ClinicContext::class)->exists('dentists', 'id')],
         ], $this->appointmentValidationMessages(), $this->appointmentValidationAttributes());
 
         $patient = $this->resolvePatient($data['paciente']);
@@ -824,7 +826,7 @@ class AppointmentController extends Controller
             return null;
         }
 
-        return User::whereKey($userId)->where('role', 'asistente')->exists()
+        return app(ClinicContext::class)->assistants()->whereKey($userId)->exists()
             ? (int) $userId
             : null;
     }

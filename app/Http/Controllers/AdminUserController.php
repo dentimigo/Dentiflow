@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\ClinicWorkspace;
+use App\Support\ClinicContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -16,14 +18,34 @@ class AdminUserController extends Controller
     public function index(Request $request)
     {
         $search = trim($request->query('search', ''));
+        $context = app(ClinicContext::class);
+        $workspaceOnly = $context->workspaceId !== null;
 
-        $users = User::with('dentist')
-            ->whereIn('role', ['pendiente', 'doctor', 'asistente'])
-            ->when($search !== '', function ($query) use ($search) {
-                $query->where(function ($subQuery) use ($search) {
+        $query = User::with('dentist')->select('users.*');
+        if ($workspaceOnly) {
+            $query->join('clinic_workspace_members as membership', 'membership.user_id', '=', 'users.id')
+                ->where('membership.clinic_workspace_id', $context->id())
+                ->whereIn('membership.role', ['doctor', 'asistente'])
+                ->addSelect('membership.role as clinic_role');
+        } else {
+            $query->whereIn('users.role', ['pendiente', 'doctor', 'asistente'])
+                ->addSelect(['clinic_role' => DB::table('clinic_workspace_members')
+                    ->select('role')->whereColumn('user_id', 'users.id')
+                    ->where('clinic_workspace_id', $context->legacyId())])
+                ->withExists(['clinicWorkspaces as has_other_clinics' => fn ($workspaces) => $workspaces
+                    ->where('clinic_workspaces.id', '!=', $context->legacyId())])
+                ->where(function ($users) use ($context) {
+                    $users->whereDoesntHave('clinicWorkspaces')
+                        ->orWhereHas('clinicWorkspaces', fn ($workspaces) => $workspaces->whereKey($context->legacyId()));
+                });
+        }
+        $roleColumn = $workspaceOnly ? 'membership.role' : 'users.role';
+        $users = $query
+            ->when($search !== '', function ($query) use ($search, $roleColumn) {
+                $query->where(function ($subQuery) use ($search, $roleColumn) {
                     $subQuery->where('name', 'like', "%{$search}%")
                         ->orWhere('email', 'like', "%{$search}%")
-                        ->orWhere('role', 'like', "%{$search}%")
+                        ->orWhere($roleColumn, 'like', "%{$search}%")
                         ->orWhereHas('dentist', fn ($dentistQuery) => $dentistQuery->where('nombre', 'like', "%{$search}%"));
                 });
             })
@@ -31,8 +53,9 @@ class AdminUserController extends Controller
             ->paginate(8)
             ->withQueryString();
 
-        $pendingUsers = User::query()
+        $pendingUsers = $workspaceOnly ? collect() : User::query()
             ->where('role', 'pendiente')
+            ->whereDoesntHave('clinicWorkspaces')
             ->orderBy('created_at')
             ->get();
 
@@ -45,7 +68,7 @@ class AdminUserController extends Controller
             'pending' => User::where('role', 'pendiente')->count(),
         ];
 
-        return view('admin.users.index', compact('users', 'pendingUsers', 'summary', 'search'));
+        return view('admin.users.index', compact('users', 'pendingUsers', 'summary', 'search', 'workspaceOnly'));
     }
 
     public function edit(User $user)
@@ -64,24 +87,39 @@ class AdminUserController extends Controller
         }
 
         $data = $request->validate([
-            'invite_email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'invite_email' => ['required', 'email', 'max:255'],
             'invite_role' => ['required', Rule::in(['doctor', 'asistente'])],
         ], [
             'invite_email.required' => 'Escribe el correo de la persona que quieres invitar.',
             'invite_email.email' => 'Escribe un correo electrónico válido.',
-            'invite_email.unique' => 'Ese correo ya tiene una cuenta. Puedes gestionarla desde Usuarios.',
             'invite_role.required' => 'Selecciona Dentista o Asistente.',
             'invite_role.in' => 'Selecciona Dentista o Asistente.',
         ]);
 
         $role = $data['invite_role'] === 'doctor' ? 'Dentista' : 'Asistente';
         $invitationId = (string) Str::uuid();
-        DB::table('user_invitations')->insert(['id' => $invitationId]);
+        $workspaceId = app(ClinicContext::class)->id();
+        $workspace = ClinicWorkspace::findOrFail($workspaceId);
+        $seatLimit = $workspace->seatLimit();
+        if ($seatLimit !== null && $workspace->members()->count() >= $seatLimit) {
+            return back()->withInput()->withErrors(['invite_email' => 'Tu agenda alcanzó el límite de integrantes del plan.']);
+        }
 
-        $url = URL::temporarySignedRoute('register', now()->addDays(3), [
-            'invitation' => $invitationId,
-            'invited_email' => $data['invite_email'],
+        $alreadyMember = User::where('email', $data['invite_email'])
+            ->whereHas('clinicWorkspaces', fn ($workspaces) => $workspaces->whereKey($workspaceId))
+            ->exists();
+        if ($alreadyMember) {
+            return back()->withInput()->withErrors(['invite_email' => 'Esta persona ya pertenece a tu consultorio.']);
+        }
+
+        DB::table('user_invitations')->insert([
+            'id' => $invitationId,
+            'clinic_workspace_id' => $workspaceId,
+            'email' => $data['invite_email'],
             'role' => $data['invite_role'],
+        ]);
+        $url = URL::temporarySignedRoute('register.invitation', now()->addDays(3), [
+            'invitation' => $invitationId,
         ]);
 
         $mailer = config('mail.default');
@@ -92,22 +130,23 @@ class AdminUserController extends Controller
 
         try {
             $sent = Mail::raw(
-                "Te invitaron a crear tu cuenta en DentiFlow con el rol de {$role}.\n\n"
-                ."Completa tu registro aquí:\n{$url}\n\n"
-                ."El enlace vence en 3 días y se puede usar para completar un solo registro. El administrador revisará tu solicitud de acceso.",
+                "Te invitaron a un consultorio de DentiFlow con el rol de {$role}.\n\n"
+                ."Acepta la invitación aquí:\n{$url}\n\n"
+                ."El enlace vence en 3 días y se puede usar una sola vez.",
                 fn ($message) => $message->to($data['invite_email'])->subject('Invitación a DentiFlow'),
             );
         } catch (TransportExceptionInterface $exception) {
             report($exception);
 
-            return back()->withInput()->withErrors(['invite_email' => 'El servicio de correo no pudo enviar la invitación. Intenta nuevamente.']);
+            return back()->with('invite_link', $url)->withErrors(['invite_email' => 'El servicio de correo no pudo enviar la invitación. Comparte el enlace.']);
         }
 
         if (! $sent) {
-            return back()->withInput()->withErrors(['invite_email' => 'No se pudo enviar la invitación.']);
+            return back()->with('invite_link', $url)->withErrors(['invite_email' => 'No se pudo enviar la invitación. Comparte el enlace.']);
         }
 
-        return redirect()->route('admin.users')->with('success', 'Invitación enviada a '.$data['invite_email'].'.');
+        return redirect()->route('admin.users')->with('invite_link', $url)
+            ->with('success', 'Invitación enviada a '.$data['invite_email'].'.');
     }
 
     public function update(Request $request, User $user)
@@ -126,6 +165,11 @@ class AdminUserController extends Controller
                 ? $user->requested_role
                 : null,
         ]);
+        if ($user->role === 'pendiente') {
+            $user->clinicWorkspaces()->detach(app(ClinicContext::class)->legacyId());
+        } else {
+            $user->clinicWorkspaces()->updateExistingPivot(app(ClinicContext::class)->legacyId(), ['role' => $user->role]);
+        }
 
         if ($user->role === 'doctor') {
             $user->dentist()->updateOrCreate(
@@ -201,5 +245,7 @@ class AdminUserController extends Controller
     private function ensureOperationalUser(User $user): void
     {
         abort_unless(in_array($user->role, ['pendiente', 'doctor', 'asistente'], true), 403);
+        abort_if($user->clinicWorkspaces()->where('clinic_workspaces.id', '!=', app(ClinicContext::class)->legacyId())->exists(), 403);
+        abort_if($user->role === 'pendiente' && ! $user->requested_role && $user->clinicWorkspaces()->exists(), 403);
     }
 }

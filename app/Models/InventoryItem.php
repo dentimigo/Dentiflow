@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToClinic;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class InventoryItem extends Model
 {
+    use BelongsToClinic;
+
     use HasFactory;
 
     public const STOCK_LOW_MAX = 2;

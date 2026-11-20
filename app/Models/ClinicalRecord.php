@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToClinic;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ClinicalRecord extends Model
 {
+    use BelongsToClinic;
+
     protected $fillable = ['patient_id', 'dentist_id', 'appointment_id', 'recorded_at', 'reason', 'diagnosis', 'procedure', 'notes', 'prescription', 'next_visit'];
     protected $casts = ['recorded_at' => 'datetime', 'next_visit' => 'date'];
 

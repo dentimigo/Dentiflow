@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\ClinicContext;
+
 use App\Models\Appointment;
 use App\Models\Dentist;
 use App\Models\Patient;
@@ -10,7 +12,6 @@ use App\Models\User;
 use App\Services\AppointmentCompletionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rule;
 
 class PatientController extends Controller
 {
@@ -100,7 +101,7 @@ class PatientController extends Controller
         $data = $request->validate([
             'nombre' => 'required|string|max:255|regex:/^[\pL\s]+$/u',
             'telefono' => 'required|digits:10',
-            'email' => 'nullable|email|max:255|unique:patients,email',
+            'email' => ['nullable', 'email', 'max:255', app(ClinicContext::class)->unique('patients', 'email')],
             'direccion' => 'required|string|max:500',
             'ultima_visita' => 'nullable|date',
             'estado' => 'nullable|string|max:50',
@@ -151,7 +152,7 @@ class PatientController extends Controller
         $data = $request->validate([
             'nombre' => 'required|string|max:255|regex:/^[\pL\s]+$/u',
             'telefono' => 'required|digits:10',
-            'email' => ['nullable', 'email', 'max:255', Rule::unique('patients', 'email')->ignore($patient->id)],
+            'email' => ['nullable', 'email', 'max:255', app(ClinicContext::class)->unique('patients', 'email')->ignore($patient->id)],
             'direccion' => 'nullable|string|max:500',
             'ultima_visita' => 'nullable|date',
             'estado' => 'nullable|string|max:50',

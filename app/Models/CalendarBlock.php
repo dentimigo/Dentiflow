@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToClinic;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CalendarBlock extends Model
 {
+    use BelongsToClinic;
+
     protected $fillable = [
         'dentist_id',
         'target_user_id',

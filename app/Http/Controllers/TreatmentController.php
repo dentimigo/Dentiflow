@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\ClinicContext;
+
 use App\Models\Treatment;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -123,7 +125,7 @@ class TreatmentController extends Controller
                 'required',
                 'string',
                 'max:255',
-                Rule::unique('treatments', 'tratamiento')
+                app(ClinicContext::class)->unique('treatments', 'tratamiento')
                     ->whereNull('appointment_id')
                     ->whereNull('patient_id')
                     ->ignore($ignoreId),

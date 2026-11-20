@@ -7,6 +7,7 @@ use App\Models\Dentist;
 use App\Models\InventoryItem;
 use App\Models\Treatment;
 use App\Models\User;
+use App\Support\ClinicContext;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
@@ -18,7 +19,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->scoped(ClinicContext::class);
     }
 
     /**
@@ -152,7 +153,7 @@ class AppServiceProvider extends ServiceProvider
             return null;
         }
 
-        return User::whereKey($userId)->where('role', 'asistente')->exists()
+        return app(ClinicContext::class)->assistants()->whereKey($userId)->exists()
             ? (int) $userId
             : null;
     }

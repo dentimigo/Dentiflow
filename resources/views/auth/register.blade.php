@@ -10,6 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 @php
+    $creatingClinic = $creatingClinic ?? false;
     $accountType = [
         'eyebrow' => 'Registro',
     ];
@@ -36,7 +37,7 @@
 
             <div class="max-w-xl py-14 lg:py-16">
                 <p class="inline-flex rounded-full bg-white/10 px-3 py-1 text-xs font-bold text-[#ead2fb]">{{ $accountType['eyebrow'] }}</p>
-                <h1 class="mt-6 max-w-lg text-4xl font-bold leading-tight tracking-tight sm:text-5xl">Registra tu acceso profesional.</h1>
+                <h1 class="mt-6 max-w-lg text-4xl font-bold leading-tight tracking-tight sm:text-5xl">{{ $creatingClinic ? 'Crea la agenda de tu consultorio.' : 'Registra tu acceso profesional.' }}</h1>
             </div>
 
         </div>
@@ -44,7 +45,7 @@
 
     <section class="flex min-h-screen items-center px-5 py-10 sm:px-8 lg:px-12">
         <div class="mx-auto w-full max-w-3xl">
-            <a href="{{ route('register') }}" class="inline-flex items-center gap-2 text-sm font-semibold text-[#9700cf] transition hover:text-[#512569]">
+            <a href="{{ route('login') }}" class="inline-flex items-center gap-2 text-sm font-semibold text-[#9700cf] transition hover:text-[#512569]">
                 <span aria-hidden="true">←</span>
                 Volver al inicio de sesión
             </a>
@@ -52,14 +53,19 @@
             <div class="mt-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                     <p class="text-xs font-bold uppercase tracking-[0.24em] text-[#9700cf]">Registro</p>
-                    <h2 class="mt-3 text-3xl font-bold tracking-tight text-[#21152e] sm:text-4xl">Crear cuenta de {{ $selectedRole === 'doctor' ? 'doctor' : 'asistente' }}</h2>
+                    <h2 class="mt-3 text-3xl font-bold tracking-tight text-[#21152e] sm:text-4xl">{{ $creatingClinic ? 'Crear cuenta y agenda' : (!empty($acceptClinicInvitation) ? 'Aceptar invitación' : 'Crear cuenta de '.($selectedRole === 'doctor' ? 'doctor' : 'asistente')) }}</h2>
+                    @isset($clinicName)
+                        <p class="mt-2 text-sm text-slate-600">Te unirás a {{ $clinicName }} como {{ $selectedRole === 'doctor' ? 'dentista' : 'asistente' }}.</p>
+                    @endisset
                 </div>
             </div>
 
             <div class="mt-8">
                 <form method="POST" action="{{ isset($invitedEmail) ? request()->fullUrl() : route('register') }}" class="rounded-[1.35rem] border border-[#ead2fb] bg-white p-6 shadow-[0_18px_60px_rgba(81,37,105,.08)]">
                     @csrf
-                    <input type="hidden" name="role" value="{{ $selectedRole }}">
+                    @unless($creatingClinic)
+                        <input type="hidden" name="role" value="{{ $selectedRole }}">
+                    @endunless
 
                     @if ($errors->any())
                         <div class="mb-5 rounded-2xl border border-fuchsia-200 bg-fuchsia-50 px-4 py-3 text-sm font-semibold text-fuchsia-700">
@@ -69,6 +75,10 @@
                         </div>
                     @endif
 
+                    @if(!empty($acceptClinicInvitation))
+                        <p class="mb-5 text-sm text-slate-600">{{ $invitedEmail }}</p>
+                        <button type="submit" class="w-full rounded-xl bg-[#9700cf] py-3.5 text-sm font-bold text-white">Aceptar y entrar</button>
+                    @else
                     <div class="mb-6 flex items-center gap-3">
                         <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#ead2fb] text-[#9700cf]">
                             <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 4 7v5c0 5 3.4 8 8 9 4.6-1 8-4 8-9V7l-8-4Z"/><path d="m9 12 2 2 4-5"/></svg>
@@ -81,15 +91,27 @@
 
                     <div class="space-y-5">
                         <div>
-                            <label for="name" class="mb-2 block text-sm font-semibold text-slate-700">Nombre completo</label>
-                            <input id="name" type="text" name="name" value="{{ old('name') }}" placeholder="Nombre y apellido" autocomplete="name" required class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-sm outline-none transition focus:border-[#9700cf] focus:ring-4 focus:ring-[#ead2fb]">
+                            <label for="name" class="mb-2 block text-sm font-semibold text-slate-700">{{ $creatingClinic ? 'Nombre' : 'Nombre completo' }}</label>
+                            <input id="name" type="text" name="name" value="{{ old('name') }}" autocomplete="{{ $creatingClinic ? 'given-name' : 'name' }}" required class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-sm outline-none transition focus:border-[#9700cf] focus:ring-4 focus:ring-[#ead2fb]">
                         </div>
+
+                        @if($creatingClinic)
+                            <div>
+                                <label for="last_name" class="mb-2 block text-sm font-semibold text-slate-700">Apellidos</label>
+                                <input id="last_name" type="text" name="last_name" value="{{ old('last_name') }}" maxlength="127" autocomplete="family-name" required class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-sm outline-none transition focus:border-[#9700cf] focus:ring-4 focus:ring-[#ead2fb]">
+                            </div>
+                            <div>
+                                <label for="clinic_name" class="mb-2 block text-sm font-semibold text-slate-700">Nombre del consultorio</label>
+                                <input id="clinic_name" type="text" name="clinic_name" value="{{ old('clinic_name') }}" maxlength="255" autocomplete="organization" required class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-sm outline-none transition focus:border-[#9700cf] focus:ring-4 focus:ring-[#ead2fb]">
+                            </div>
+                        @endif
 
                         <div>
                             <label for="email" class="mb-2 block text-sm font-semibold text-slate-700">Correo electrónico</label>
                             <input id="email" type="email" name="email" value="{{ $invitedEmail ?? old('email') }}" @readonly(isset($invitedEmail)) placeholder="nombre@clinica.com" autocomplete="email" required class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3.5 text-sm outline-none transition focus:border-[#9700cf] focus:ring-4 focus:ring-[#ead2fb]">
                         </div>
 
+                        @unless($creatingClinic)
                         <fieldset>
                             <legend class="mb-2 block text-sm font-semibold text-slate-700">Genero</legend>
                             <div class="grid gap-3 sm:grid-cols-2">
@@ -103,6 +125,7 @@
                                 </label>
                             </div>
                         </fieldset>
+                        @endunless
 
                         <div class="grid gap-5 sm:grid-cols-2">
                             <div>
@@ -142,8 +165,9 @@
                             </div>
                         </div>
 
-                        <button type="submit" class="w-full rounded-xl bg-[#9700cf] py-3.5 text-sm font-bold text-white shadow-lg shadow-[#d3a2f2] transition hover:bg-[#512569]">Enviar solicitud de acceso</button>
+                        <button type="submit" class="w-full rounded-xl bg-[#9700cf] py-3.5 text-sm font-bold text-white shadow-lg shadow-[#d3a2f2] transition hover:bg-[#512569]">{{ $creatingClinic ? 'Crear mi agenda' : (isset($clinicName) ? 'Crear cuenta y aceptar' : 'Enviar solicitud de acceso') }}</button>
                     </div>
+                    @endif
                 </form>
             </div>
 

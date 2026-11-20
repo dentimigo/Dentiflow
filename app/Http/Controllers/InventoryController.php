@@ -2,10 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\ClinicContext;
+
 use App\Models\InventoryItem;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -42,7 +43,7 @@ class InventoryController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'material' => 'required|string|max:255|unique:inventory_items,material',
+            'material' => ['required', 'string', 'max:255', app(ClinicContext::class)->unique('inventory_items', 'material')],
             'stock' => 'required|integer|min:0',
             'reposicion' => 'required|integer|min:0',
             'costo' => 'required|numeric|min:0',
@@ -66,7 +67,7 @@ class InventoryController extends Controller
     public function update(Request $request, $id)
     {
         $validated = $request->validate([
-            'material' => ['required', 'string', 'max:255', Rule::unique('inventory_items', 'material')->ignore($id)],
+            'material' => ['required', 'string', 'max:255', app(ClinicContext::class)->unique('inventory_items', 'material')->ignore($id)],
             'stock' => 'required|integer|min:0',
             'reposicion' => 'required|integer|min:0',
             'costo' => 'required|numeric|min:0',

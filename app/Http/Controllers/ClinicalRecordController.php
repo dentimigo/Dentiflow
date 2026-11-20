@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\ClinicContext;
+
 use App\Models\Dentist;
 use App\Models\MedicalHistory;
 use App\Models\Patient;
@@ -13,7 +15,7 @@ class ClinicalRecordController extends Controller
     {
         $this->authorizeDoctor();
         $data = $request->validate([
-            'dentist_id' => session('access_role') === 'admin' ? 'required|exists:dentists,id' : 'nullable',
+            'dentist_id' => session('access_role') === 'admin' ? ['required', app(ClinicContext::class)->exists('dentists', 'id')] : 'nullable',
             'recorded_at' => 'required|date',
             'reason' => 'required|string|max:255',
             'diagnosis' => 'nullable|string|max:3000',

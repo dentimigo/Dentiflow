@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\ClinicContext;
+
 use App\Models\Dentist;
 use App\Models\DentistSchedule;
 use App\Models\User;
@@ -25,7 +27,7 @@ class DentistController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'nombre' => 'required|string|max:255|unique:dentists,nombre',
+            'nombre' => ['required', 'string', 'max:255', app(ClinicContext::class)->unique('dentists', 'nombre')],
             'especialidad' => 'nullable|string|max:255',
             'telefono' => 'required|string|max:50',
             'email' => 'required|email|max:255|unique:users,email',
@@ -64,7 +66,7 @@ class DentistController extends Controller
         $dentista = Dentist::findOrFail($id);
 
         $data = $request->validate([
-            'nombre' => ['required', 'string', 'max:255', Rule::unique('dentists', 'nombre')->ignore($dentista->id)],
+            'nombre' => ['required', 'string', 'max:255', app(ClinicContext::class)->unique('dentists', 'nombre')->ignore($dentista->id)],
             'especialidad' => 'nullable|string|max:255',
             'telefono' => 'required|string|max:50',
             'email' => [

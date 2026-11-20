@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\ClinicContext;
+
 use App\Models\Appointment;
 use App\Models\Dentist;
 use App\Models\Patient;
@@ -59,12 +61,12 @@ class AdminReportController extends Controller
         abort_unless($appointment->estado === 'Terminada', 404);
 
         $data = $request->validate([
-            'patient_id' => 'required|exists:patients,id',
-            'dentist_id' => 'required|exists:dentists,id',
+            'patient_id' => ['required', app(ClinicContext::class)->exists('patients', 'id')],
+            'dentist_id' => ['required', app(ClinicContext::class)->exists('dentists', 'id')],
             'date' => 'required|date',
             'time' => 'required|date_format:H:i',
             'end_time' => 'required|date_format:H:i',
-            'tipo' => 'required|string|exists:treatments,tratamiento',
+            'tipo' => ['required', 'string', app(ClinicContext::class)->exists('treatments', 'tratamiento')],
         ], $this->validationMessages(), $this->validationAttributes());
 
         $start = Carbon::createFromFormat('Y-m-d H:i', "{$data['date']} {$data['time']}");

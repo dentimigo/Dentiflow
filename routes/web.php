@@ -8,9 +8,12 @@ use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\Auth\ClinicInvitationController;
+use App\Http\Controllers\Auth\ClinicRegistrationController;
 use App\Http\Controllers\PatientController;
 use App\Http\Controllers\TreatmentController;
 use App\Http\Controllers\ClinicalRecordController;
+use App\Http\Controllers\ClinicPlanController;
 use App\Http\Controllers\PasswordRecoveryController;
 use App\Http\Middleware\EnsureRoleAccess;
 use Illuminate\Auth\Events\PasswordReset;
@@ -38,24 +41,30 @@ Route::view('/conoce-dentiflow', 'marketing.dentiflow')
 
 Route::post('/login', [LoginController::class, 'store']);
 
+Route::get('/register/invitacion/{invitation}', [ClinicInvitationController::class, 'show'])
+    ->whereUuid('invitation')->middleware('signed')->name('register.invitation');
+Route::post('/register/invitacion/{invitation}', [ClinicInvitationController::class, 'store'])
+    ->whereUuid('invitation')->middleware(['signed', 'throttle:10,1'])->name('register.invitation.store');
+
 Route::get('/registro-en-espera', function () {
     return view('auth.pending');
 })->name('register.pending');
 
-Route::get('/register', function (Request $request) {
+Route::get('/register', function (Request $request, ClinicRegistrationController $registration) {
     $role = $request->query('role');
     $invitedEmail = $request->query('invited_email');
+
+    if ($invitedEmail === null) {
+        return $registration->show($request);
+    }
 
     if ($invitedEmail !== null) {
         abort_unless($request->hasValidSignature(), 403, 'La invitación venció o el enlace es inválido.');
         abort_unless(DB::table('user_invitations')
             ->where('id', $request->query('invitation'))
+            ->whereNull('clinic_workspace_id')
             ->whereNull('used_at')
             ->exists(), 410, 'La invitación ya se utilizó o necesitas pedir un enlace nuevo.');
-    }
-
-    if ($role === null) {
-        return view('auth.role-selector', ['registrationMode' => true]);
     }
 
     if (! in_array($role, ['doctor', 'asistente'], true)) {
@@ -67,7 +76,11 @@ Route::get('/register', function (Request $request) {
     return view('auth.register', ['selectedRole' => $role, 'invitedEmail' => $invitedEmail]);
 })->name('register');
 
-Route::post('/register', function (Request $request) {
+Route::post('/register', function (Request $request, ClinicRegistrationController $registration) {
+    if ($request->query('invited_email') === null) {
+        return $registration->store($request);
+    }
+
     if ($request->query('invited_email') !== null) {
         abort_unless($request->hasValidSignature(), 403, 'La invitación venció o el enlace es inválido.');
 
@@ -102,6 +115,7 @@ Route::post('/register', function (Request $request) {
         if ($request->query('invited_email') !== null) {
             $claimed = DB::table('user_invitations')
                 ->where('id', $request->query('invitation'))
+                ->whereNull('clinic_workspace_id')
                 ->whereNull('used_at')
                 ->update(['used_at' => now()]);
 
@@ -125,7 +139,7 @@ Route::post('/register', function (Request $request) {
             'pending_email' => $user->email,
             'pending_requested_role' => $user->requested_role,
         ]);
-});
+})->middleware('throttle:10,1');
 
 Route::get('/forgot-password', [PasswordRecoveryController::class, 'showForgotForm'])->name('password.forgot');
 Route::post('/forgot-password/send-code', [PasswordRecoveryController::class, 'sendCode'])->name('password.forgot.send');
@@ -224,6 +238,9 @@ Route::delete('/administracion/usuarios/{user}', [AdminUserController::class, 'd
 
 Route::redirect('/dashboard', '/inicio');
 Route::get('/inicio', [DashboardController::class, 'index'])->name('inicio');
+Route::get('/agenda/plan', [ClinicPlanController::class, 'show'])->name('clinic.plan');
+Route::post('/agenda/plan', [ClinicPlanController::class, 'start'])->name('clinic.plan.start');
+Route::post('/agenda/plan/portal', [ClinicPlanController::class, 'portal'])->name('clinic.plan.portal');
 Route::get('/calendario', [DashboardController::class, 'calendar'])->name('calendario');
 Route::post('/calendario/bloqueos', [DashboardController::class, 'storeCalendarBlock'])->name('calendario.bloqueos.store');
 Route::delete('/calendario/bloqueos/{block}', [DashboardController::class, 'destroyCalendarBlock'])->name('calendario.bloqueos.destroy');

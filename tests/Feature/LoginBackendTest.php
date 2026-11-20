@@ -7,9 +7,12 @@ use App\Models\User;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class LoginBackendTest extends TestCase
@@ -78,22 +81,22 @@ class LoginBackendTest extends TestCase
             ->assertDontSee(route('login', ['role' => 'asistente']), false);
     }
 
-    public function test_create_account_page_offers_doctor_and_assistant_options(): void
+    public function test_create_account_page_offers_clinic_creation_without_a_role_selector(): void
     {
         $this->get(route('register'))
             ->assertOk()
-            ->assertSee('Que tipo de cuenta deseas crear?')
+            ->assertSee('Crear cuenta y agenda')
+            ->assertSee('Nombre del consultorio')
             ->assertSee('Volver al inicio de sesi', false)
             ->assertSee(route('login'), false)
-            ->assertSee(route('register', ['role' => 'doctor']), false)
-            ->assertSee(route('register', ['role' => 'asistente']), false);
+            ->assertDontSee('name="role"', false);
     }
 
-    public function test_register_page_keeps_the_selected_profile_type(): void
+    public function test_old_invited_registration_keeps_its_signed_profile_type(): void
     {
-        $this->get(route('register', ['role' => 'asistente']))
+        $this->get($this->legacyInvitation('registro.asistente@example.test', 'asistente'))
             ->assertOk()
-            ->assertSee('Crear cuenta de Asistente')
+            ->assertSee('Crear cuenta de asistente')
             ->assertSee('Enviar solicitud de acceso')
             ->assertSee('name="role" value="asistente"', false)
             ->assertSee('name="gender"', false)
@@ -104,7 +107,7 @@ class LoginBackendTest extends TestCase
 
     public function test_doctor_registration_enters_waiting_room_until_approved(): void
     {
-        $this->post(route('register'), [
+        $this->post($this->legacyInvitation('registro.doctor@example.test', 'doctor'), [
             'role' => 'doctor',
             'name' => 'Dra. Registro Nuevo',
             'email' => 'registro.doctor@example.test',
@@ -178,7 +181,7 @@ class LoginBackendTest extends TestCase
 
     public function test_assistant_registration_enters_waiting_room_until_approved(): void
     {
-        $this->post(route('register'), [
+        $this->post($this->legacyInvitation('registro.asistente@example.test', 'asistente'), [
             'role' => 'asistente',
             'name' => 'Asistente Nueva',
             'email' => 'registro.asistente@example.test',
@@ -431,20 +434,32 @@ class LoginBackendTest extends TestCase
 
     public function test_registration_shows_translated_validation_error_only_once(): void
     {
-        $this->from(route('register', ['role' => 'doctor']))->post(route('register'), [
-            'role' => 'doctor',
-            'name' => 'Doctor Prueba',
+        $this->from(route('register'))->post(route('register'), [
+            'name' => 'Doctor',
+            'last_name' => 'Prueba',
+            'clinic_name' => 'Clínica de prueba',
             'email' => 'doctor.corto@example.test',
-            'gender' => 'hombre',
             'password' => 'corta',
             'password_confirmation' => 'corta',
         ])->assertSessionHasErrors('password');
 
-        $page = $this->get(route('register', ['role' => 'doctor']));
-        $message = 'La contrasena debe tener al menos 8 caracteres.';
+        $page = $this->get(route('register'));
+        $message = 'La contraseña debe tener al menos 8 caracteres.';
         $page->assertSee($message);
         $page->assertDontSee('validation.min.string');
         $this->assertSame(1, substr_count($page->getContent(), $message));
+    }
+
+    private function legacyInvitation(string $email, string $role): string
+    {
+        $id = (string) Str::uuid();
+        DB::table('user_invitations')->insert(['id' => $id]);
+
+        return URL::temporarySignedRoute('register', now()->addDay(), [
+            'invitation' => $id,
+            'invited_email' => $email,
+            'role' => $role,
+        ]);
     }
 
     public function test_code_password_change_requires_complex_and_matching_passwords(): void

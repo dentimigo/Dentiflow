@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\ClinicContext;
+
 use App\Models\Appointment;
 use App\Models\AuditLog;
 use App\Models\CalendarBlock;
@@ -449,8 +451,8 @@ class DashboardController extends Controller
             'calendarBlocks' => $blocks,
             'dayBlocks' => $dayBlocks,
             'dentists' => Dentist::orderBy('nombre')->get(['id', 'nombre']),
-            'assistants' => $isOperationalAdmin
-                ? User::where('role', 'asistente')->orderBy('name')->get(['id', 'name'])
+            'assistants' => ($isOperationalAdmin || $isDoctor || $isAssistant)
+                ? app(ClinicContext::class)->assistants()->orderBy('name')->get(['id', 'name'])
                 : collect(),
             'treatments' => Treatment::whereNull('appointment_id')->whereNull('patient_id')->orderBy('tratamiento')->pluck('tratamiento')->unique()->values(),
             'selectedDentist' => $selectedDentist,
@@ -472,7 +474,7 @@ class DashboardController extends Controller
 
         $data = $request->validate([
             'target' => $isOperationalAdmin ? ['required', 'string', 'regex:/^(dentist|assistant):[0-9]+$/'] : ['nullable'],
-            'dentist_id' => ($isDoctor || $isOperationalAdmin) ? 'nullable' : 'required|exists:dentists,id',
+            'dentist_id' => ($isDoctor || $isOperationalAdmin) ? 'nullable' : ['required', app(ClinicContext::class)->exists('dentists', 'id')],
             'date' => 'required|date|after_or_equal:today',
             'type' => 'required|string|max:60',
             'notes' => 'nullable|string|max:500',
@@ -488,7 +490,7 @@ class DashboardController extends Controller
                 $dentistId = Dentist::whereKey($targetId)->value('id');
                 abort_unless($dentistId, 422);
             } else {
-                $targetUserId = User::whereKey($targetId)->where('role', 'asistente')->value('id');
+                $targetUserId = app(ClinicContext::class)->assistants()->whereKey($targetId)->value('id');
                 abort_unless($targetUserId, 422);
             }
         }
@@ -632,7 +634,7 @@ class DashboardController extends Controller
             return null;
         }
 
-        return User::whereKey($userId)->where('role', 'asistente')->exists()
+        return app(ClinicContext::class)->assistants()->whereKey($userId)->exists()
             ? (int) $userId
             : null;
     }

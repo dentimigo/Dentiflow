@@ -6,6 +6,7 @@ namespace App\Models;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Notifications\Notifiable;
 
@@ -56,5 +57,12 @@ class User extends Authenticatable
     public function dentist(): HasOne
     {
         return $this->hasOne(Dentist::class);
+    }
+
+    public function clinicWorkspaces(): BelongsToMany
+    {
+        return $this->belongsToMany(ClinicWorkspace::class, 'clinic_workspace_members')
+            ->withPivot('role')
+            ->withTimestamps();
     }
 }

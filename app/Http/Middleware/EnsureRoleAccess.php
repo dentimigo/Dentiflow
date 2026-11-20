@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Models\ClinicSetting;
 use App\Models\User;
+use App\Support\ClinicContext;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -15,17 +16,18 @@ class EnsureRoleAccess
     {
         $routeName = $request->route()?->getName();
 
-        if (!$routeName || Str::is(['role.select', 'login', 'register', 'register.pending', 'password.*', 'storage.*', 'logout'], $routeName)) {
+        if (!$routeName || Str::is(['role.select', 'login', 'register', 'register.*', 'password.*', 'storage.*', 'logout'], $routeName)) {
             return $next($request);
         }
 
         $authenticatedUser = $request->user();
+        $effectiveRole = app(ClinicContext::class)->role ?? $authenticatedUser?->role;
         if ($authenticatedUser && (
             (int) session('access_user_id') !== (int) $authenticatedUser->id
-            || session('access_role') !== $authenticatedUser->role
+            || session('access_role') !== $effectiveRole
         )) {
             $request->session()->put([
-                'access_role' => $authenticatedUser->role,
+                'access_role' => $effectiveRole,
                 'access_user_id' => $authenticatedUser->id,
                 'access_name' => $authenticatedUser->name,
                 'access_email' => $authenticatedUser->email,
@@ -33,7 +35,7 @@ class EnsureRoleAccess
             ]);
         }
 
-        $role = $authenticatedUser?->role ?? session('access_role');
+        $role = $effectiveRole ?? session('access_role');
 
         if (!$role) {
             return redirect()->route('role.select');
@@ -52,6 +54,10 @@ class EnsureRoleAccess
 
         if ($role === 'pendiente') {
             return redirect()->route('register.pending');
+        }
+
+        if ($request->attributes->has('clinic_workspace') && Str::is('clinic.plan*', $routeName)) {
+            return $next($request);
         }
 
         if ($role === 'superadmin' && Str::is('admin.users*', $routeName)) {

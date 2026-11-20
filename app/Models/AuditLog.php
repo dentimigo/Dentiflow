@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToClinic;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Http\Request;
 
 class AuditLog extends Model
 {
+    use BelongsToClinic;
+
     protected $fillable = [
         'user_id',
         'actor_name',

@@ -44,6 +44,21 @@
         <div class="rounded-xl border border-fuchsia-200 bg-fuchsia-50 px-4 py-3 text-sm font-semibold text-fuchsia-700">{{ $errors->first() }}</div>
     @endif
 
+    @if($isDoctor || $isAssistant)
+        <details class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <summary class="cursor-pointer text-sm font-semibold text-slate-700">Asistentes del consultorio</summary>
+            @if($assistants->isEmpty())
+                <p class="mt-3 text-sm text-slate-500">Todavía no hay asistentes en este consultorio.</p>
+            @else
+                <ul class="mt-3 space-y-2 text-sm text-slate-700">
+                    @foreach($assistants as $assistant)
+                        <li>{{ $assistant->name }}</li>
+                    @endforeach
+                </ul>
+            @endif
+        </details>
+    @endif
+
     @if($isDoctor)
         <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">

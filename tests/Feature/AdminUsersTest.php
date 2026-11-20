@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Dentist;
+use App\Models\ClinicWorkspace;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
@@ -27,7 +28,7 @@ class AdminUsersTest extends TestCase
 
         $this->flushSession();
         $this->get($url)->assertOk()->assertSee('dentista@example.test');
-        $this->get(str_replace('role=doctor', 'role=asistente', $url))->assertForbidden();
+        $this->get($url.'&role=asistente')->assertForbidden();
         $registration = [
             'name' => 'Dentista Invitado',
             'email' => 'otro@example.test',
@@ -41,19 +42,57 @@ class AdminUsersTest extends TestCase
             ->assertRedirect($url)
             ->assertSessionHasErrors('name');
         $this->get($url)->assertOk();
-        $this->post($url, $registration)->assertRedirect(route('register.pending'));
+        $this->post($url, $registration)->assertRedirect(route('inicio'));
 
-        $this->assertDatabaseHas('users', [
-            'email' => 'dentista@example.test',
-            'role' => 'pendiente',
-            'requested_role' => 'doctor',
+        $dentist = User::where('email', 'dentista@example.test')->firstOrFail();
+        $this->assertDatabaseHas('clinic_workspace_members', [
+            'clinic_workspace_id' => ClinicWorkspace::oldest('id')->firstOrFail()->id,
+            'user_id' => $dentist->id,
+            'role' => 'doctor',
         ]);
 
         $this->get($url)->assertStatus(410);
+        auth()->logout();
+        $this->flushSession();
+        $this->post('/login', ['email' => $dentist->email, 'password' => 'Password123!'])
+            ->assertRedirect(route('inicio'))
+            ->assertSessionHas('access_role', 'doctor');
 
-        User::where('email', 'dentista@example.test')->firstOrFail()->delete();
+        $dentist->delete();
         $this->post($url, $registration)->assertStatus(410);
         $this->assertDatabaseMissing('users', ['email' => 'dentista@example.test']);
+    }
+
+    public function test_existing_user_accepts_only_the_inviting_workspace(): void
+    {
+        config(['mail.default' => 'log']);
+        $owner = User::factory()->create();
+        $clinic = ClinicWorkspace::createForOwner($owner, 'Consultorio Pedrito');
+        $otherClinic = ClinicWorkspace::createForOwner(User::factory()->create(), 'Consultorio Juan');
+        $recipient = User::factory()->create(['email' => 'asistente@example.test', 'role' => 'doctor']);
+        $otherClinic->members()->attach($recipient, ['role' => 'doctor']);
+
+        $this->actingAs($owner)->withSession(['clinic_workspace_id' => $clinic->id]);
+        $this->get(route('admin.users'))->assertOk()->assertDontSee($recipient->email);
+        $this->post(route('admin.users.invite'), [
+            'invite_email' => $recipient->email,
+            'invite_role' => 'asistente',
+        ])->assertRedirect(route('admin.users'))->assertSessionHas('invite_link');
+        $url = session('invite_link');
+        $this->get($url)->assertForbidden();
+
+        auth()->logout();
+        $this->flushSession();
+        $this->get($url)->assertRedirect(route('login'));
+        $this->post('/login', ['email' => $recipient->email, 'password' => 'password'])->assertRedirect($url);
+        $this->get($url)->assertOk()->assertSee('Consultorio Pedrito');
+        $this->post($url)->assertRedirect(route('inicio'))->assertSessionHas('clinic_workspace_id', $clinic->id);
+        $this->get(route('calendario'))->assertOk()->assertSessionHas('access_role', 'asistente');
+        $this->get($url)->assertStatus(410);
+        $this->assertSame('asistente', $recipient->clinicWorkspaces()->findOrFail($clinic->id)->pivot->role);
+        $this->assertSame('doctor', $recipient->clinicWorkspaces()->findOrFail($otherClinic->id)->pivot->role);
+        $this->actingAs($owner)->withSession(['clinic_workspace_id' => $clinic->id])
+            ->get(route('admin.users'))->assertOk()->assertSee($recipient->email);
     }
 
     public function test_admin_can_copy_an_invitation_when_outgoing_mail_is_disabled(): void

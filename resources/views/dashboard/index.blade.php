@@ -2,6 +2,7 @@
 @section('title', 'Agenda')
 @section('content')
 @php
+    $activeWorkspace = request()->attributes->get('clinic_workspace');
     $role = session('access_role');
     $isDoctor = $role === 'doctor';
     $isOperationalAdmin = $role === 'admin';
@@ -58,6 +59,15 @@
     <section class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
             <h1 class="text-3xl font-bold tracking-tight">{{ $isDoctor ? 'Resumen clínico' : ($isOperationalAdmin ? 'Resumen' : 'Resumen de recepción') }}</h1>
+            @if($activeWorkspace?->trial_ends_at && (int) $activeWorkspace->owner_user_id === (int) auth()->id())
+                <a href="{{ route('clinic.plan') }}" class="mt-2 inline-block text-sm font-semibold underline">
+                    @if($activeWorkspace->stripe_status === 'active')
+                        Gestionar suscripción
+                    @else
+                        La prueba termina el {{ $activeWorkspace->trial_ends_at->format('d/m/Y H:i') }}
+                    @endif
+                </a>
+            @endif
             <p class="mt-1 text-sm text-slate-500">{{ $isDoctor ? 'Consulta tu agenda, pacientes y actividad del día.' : ($isOperationalAdmin ? 'Vista general de las actividades y operaciones diarias del consultorio.' : 'Revisa citas, pacientes y tareas del consultorio.') }}</p>
         </div>
         <a href="{{ route('citas.create') }}" class="inline-flex items-center justify-center gap-2 rounded-xl bg-[#9700cf] px-5 py-3 text-sm font-bold text-white shadow-lg shadow-[#d3a2f2]"><span class="text-lg leading-none">+</span>Nueva cita</a>

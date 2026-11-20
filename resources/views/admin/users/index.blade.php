@@ -33,10 +33,10 @@
 
     <section class="rounded-2xl border border-slate-200 bg-white p-5">
         <h2 class="font-bold text-slate-900">Invitar gente</h2>
-        <p class="mt-2 text-sm text-slate-500">Genera un enlace de un solo uso válido por 3 días. La cuenta aparecerá en Solicitudes pendientes cuando la persona complete su registro.</p>
+        <p class="mt-2 text-sm text-slate-500">Genera un enlace de un solo uso válido por 3 días para incorporar a alguien a tu consultorio.</p>
         @if(session('invite_link'))
             <div class="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-4">
-                <label for="invite-link" class="block text-sm font-semibold text-slate-700">El correo saliente está desactivado. Copia y comparte este enlace con la persona invitada.</label>
+                <label for="invite-link" class="block text-sm font-semibold text-slate-700">Copia y comparte este enlace con la persona invitada.</label>
                 <input id="invite-link" type="text" readonly value="{{ session('invite_link') }}" class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm">
             </div>
         @endif
@@ -134,13 +134,15 @@
                 </thead>
                 <tbody class="divide-y divide-slate-100 text-sm">
                     @forelse($users as $user)
+                        @php($displayRole = $user->clinic_role ?? $user->role)
                         <tr>
                             <td class="px-5 py-4 font-semibold text-slate-800">{{ $user->name }}</td>
                             <td class="px-5 py-4 text-slate-500">{{ $user->email }}</td>
                             <td class="px-5 py-4">
-                                <span class="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase {{ $roleBadges[$user->role] ?? 'bg-slate-100 text-slate-600' }}">{{ $roleOptions[$user->role] ?? 'Sin rol activo' }}</span>
+                                <span class="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase {{ $roleBadges[$displayRole] ?? 'bg-slate-100 text-slate-600' }}">{{ $roleOptions[$displayRole] ?? 'Sin rol activo' }}</span>
                             </td>
                             <td class="px-5 py-4 text-right">
+                                @if(!$workspaceOnly && !$user->has_other_clinics && !($user->role === 'pendiente' && $user->clinic_role))
                                 <div class="flex items-center justify-end gap-3">
                                     <a href="{{ route('admin.users.edit', $user) }}" class="text-sm font-semibold text-[#9700cf] hover:text-[#8200b8]">Editar</a>
                                     <button type="button" onclick="document.getElementById('delete-user-{{ $user->id }}')?.showModal()" class="text-sm font-semibold text-fuchsia-600 hover:text-fuchsia-700">Eliminar</button>
@@ -165,6 +167,7 @@
                                         </div>
                                     </form>
                                 </dialog>
+                                @endif
                             </td>
                         </tr>
                     @empty
