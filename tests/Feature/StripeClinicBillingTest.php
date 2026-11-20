@@ -14,6 +14,71 @@ class StripeClinicBillingTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_only_the_owner_can_change_plan_and_the_team_must_fit(): void
+    {
+        config([
+            'stripe.enabled' => true,
+            'stripe.secret' => 'sk_test_example',
+            'stripe.webhook_secret' => 'whsec_example',
+        ]);
+
+        $owner = User::factory()->create();
+        $assistant = User::factory()->create();
+        $clinic = ClinicWorkspace::createForOwner($owner, 'Consultorio Stripe', trialRequired: true);
+        $trialEnd = now()->addDays(3)->startOfSecond();
+        $clinic->forceFill([
+            'trial_plan' => 'consultorio',
+            'trial_ends_at' => $trialEnd,
+            'stripe_customer_id' => 'cus_Example',
+            'stripe_subscription_id' => 'sub_Example',
+            'stripe_status' => 'trialing',
+        ])->save();
+        $clinic->members()->attach($assistant, ['role' => 'asistente']);
+        $extra = User::factory()->create();
+        $clinic->members()->attach($extra, ['role' => 'doctor']);
+        $session = ['clinic_workspace_id' => $clinic->id, 'access_role' => 'admin'];
+        $input = ['plan' => 'basico', 'confirm' => '1'];
+        Http::preventStrayRequests();
+
+        $this->actingAs($assistant)->withSession(array_replace($session, ['access_role' => 'asistente']))
+            ->get(route('perfil'))->assertOk()->assertDontSee('id="subscription-heading"', false);
+        $this->post(route('perfil.subscription.change'), $input)->assertForbidden();
+        $this->actingAs($owner)->withSession($session)->get(route('perfil'))
+            ->assertOk()->assertSee('Suscripción')->assertSee('499 MXN al mes');
+        $this->post(route('perfil.subscription.change'), $input)
+            ->assertSessionHasErrorsIn('subscription', 'plan');
+
+        $clinic->members()->detach($extra);
+        $price = [
+            'currency' => 'mxn', 'livemode' => false, 'active' => true,
+            'recurring' => ['interval' => 'month', 'interval_count' => 1],
+        ];
+        $basic = $price + ['id' => config('stripe.prices.basico'), 'unit_amount' => 19900];
+        $subscription = [
+            'id' => 'sub_Example', 'customer' => 'cus_Example', 'status' => 'trialing',
+            'livemode' => false, 'trial_end' => $trialEnd->timestamp,
+            'items' => ['data' => [[
+                'id' => 'si_Example', 'quantity' => 1,
+                'price' => $price + ['id' => config('stripe.prices.consultorio'), 'unit_amount' => 49900],
+            ]]],
+        ];
+        $updated = $subscription;
+        $updated['items']['data'][0]['price'] = $basic;
+        Http::fake([
+            'https://api.stripe.com/v1/prices/*' => Http::response($basic),
+            'https://api.stripe.com/v1/subscriptions/sub_Example*' => fn (Request $request) =>
+                Http::response($request->method() === 'POST' ? $updated : $subscription),
+        ]);
+
+        $this->post(route('perfil.subscription.change'), $input)
+            ->assertRedirect(route('perfil'))->assertSessionHas('subscription_status');
+        Http::assertSent(fn (Request $request) => $request->method() === 'POST'
+            && $request['proration_behavior'] === 'none'
+            && $request['billing_cycle_anchor'] === 'unchanged');
+        $this->assertSame('basico', $clinic->fresh()->trial_plan);
+        $this->assertEquals($trialEnd->timestamp, $clinic->fresh()->trial_ends_at->timestamp);
+    }
+
     #[DataProvider('plans')]
     public function test_signed_stripe_confirmation_controls_the_trial_and_paid_access(string $plan, int $amount): void
     {

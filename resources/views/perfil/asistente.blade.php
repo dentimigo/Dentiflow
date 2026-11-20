@@ -50,7 +50,7 @@
                     <div class="mt-5 grid flex-1 content-start gap-3">
                         <div class="rounded-2xl bg-[#fbf0ff] p-4">
                             <p class="text-xs font-bold uppercase tracking-wider text-[#ad79d3]">Rol</p>
-                            <p class="mt-2 text-sm font-semibold text-slate-800">Asistente</p>
+                            <p class="mt-2 text-sm font-semibold text-slate-800">{{ session('access_role') === 'admin' ? 'Administrador' : 'Asistente' }}</p>
                         </div>
                         <div class="rounded-2xl bg-[#fbf0ff] p-4">
                             <p class="text-xs font-bold uppercase tracking-wider text-[#ad79d3]">Último acceso</p>
@@ -67,6 +67,9 @@
                     </div>
         </article>
     </section>
+    @if ($billingWorkspace)
+        @include('perfil.suscripcion', ['workspace' => $billingWorkspace])
+    @endif
 </div>
 @endsection
 

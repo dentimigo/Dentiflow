@@ -126,15 +126,66 @@ class StripeClinicBilling
         });
     }
 
-    public function portal(ClinicWorkspace $workspace): string
+    public function portal(ClinicWorkspace $workspace, ?string $returnUrl = null): string
     {
         abort_unless($workspace->stripe_customer_id, 404);
         $portal = $this->api()->post('billing_portal/sessions', [
             'customer' => $workspace->stripe_customer_id,
-            'return_url' => route('clinic.plan'),
+            'return_url' => $returnUrl ?? route('clinic.plan'),
         ])->throw()->json();
 
         return $this->stripeUrl($portal['url'], 'billing.stripe.com');
+    }
+
+    public function changePlan(ClinicWorkspace $workspace, string $plan): void
+    {
+        DB::transaction(function () use ($workspace, $plan) {
+            $workspace = ClinicWorkspace::query()->lockForUpdate()->findOrFail($workspace->id);
+            abort_unless($workspace->stripe_subscription_id && $workspace->stripe_customer_id && $workspace->hasWorkspaceAccess(), 403);
+
+            if ($workspace->members()->count() > ClinicWorkspace::TRIAL_PLANS[$plan]['seats']) {
+                throw ValidationException::withMessages([
+                    'plan' => 'El plan seleccionado no tiene cupo para todos los integrantes del consultorio.',
+                ]);
+            }
+
+            $api = $this->api();
+            $path = 'subscriptions/'.$workspace->stripe_subscription_id;
+            $subscription = $api->get($path, ['expand' => ['latest_invoice']])->throw()->json();
+            $items = data_get($subscription, 'items.data', []);
+            $item = $items[0] ?? [];
+            $currentPlan = array_search(data_get($item, 'price.id'), config('stripe.prices'), true);
+            abort_unless($subscription['customer'] === $workspace->stripe_customer_id
+                && ($subscription['livemode'] ?? true) === false
+                && count($items) === 1 && ($item['quantity'] ?? null) === 1
+                && $currentPlan !== false && $this->validPrice($item['price'], $currentPlan), 409);
+
+            if (! in_array($subscription['status'], ['trialing', 'active'], true)
+                || ! empty($subscription['cancel_at']) || ! empty($subscription['cancel_at_period_end'])
+                || ! empty($subscription['schedule']) || ! empty($subscription['pending_update'])) {
+                throw ValidationException::withMessages([
+                    'plan' => 'La suscripción tiene un cambio pendiente o no está activa. Revísala en Stripe.',
+                ]);
+            }
+
+            if ($currentPlan !== $plan) {
+                $priceId = config('stripe.prices.'.$plan);
+                abort_unless(is_string($priceId) && preg_match('/^price_[A-Za-z0-9]+$/D', $priceId), 503);
+                $price = $api->get('prices/'.$priceId)->throw()->json();
+                abort_unless($this->validPrice($price, $plan) && ($price['active'] ?? false), 503);
+
+                $subscription = $api->post($path, [
+                    'items' => [['id' => $item['id'], 'price' => $priceId, 'quantity' => 1]],
+                    'proration_behavior' => 'none',
+                    'billing_cycle_anchor' => 'unchanged',
+                    'payment_behavior' => 'error_if_incomplete',
+                    'expand' => ['latest_invoice'],
+                ])->throw()->json();
+                abort_unless(data_get($subscription, 'items.data.0.price.id') === $priceId, 502);
+            }
+
+            $this->saveSubscription($workspace, $subscription, $plan);
+        });
     }
 
     public function sync(string $subscriptionId, ?string $checkoutId): void

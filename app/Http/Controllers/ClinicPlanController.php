@@ -67,7 +67,35 @@ class ClinicPlanController extends Controller
         $workspace = $this->workspace($request);
         abort_unless((int) $workspace->owner_user_id === (int) $request->user()->id, 403);
 
-        return redirect()->away($billing->portal($workspace));
+        $returnRoute = $workspace->hasWorkspaceAccess() ? 'perfil' : 'clinic.plan';
+
+        return redirect()->away($billing->portal($workspace, route($returnRoute)));
+    }
+
+    public function change(Request $request, StripeClinicBilling $billing)
+    {
+        $workspace = $this->workspace($request);
+        abort_unless((int) $workspace->owner_user_id === (int) $request->user()->id, 403);
+        $data = $request->validateWithBag('subscription', [
+            'plan' => ['required', Rule::in(array_keys(ClinicWorkspace::TRIAL_PLANS))],
+            'confirm' => ['accepted'],
+        ], [
+            'confirm.accepted' => 'Confirma que aceptas el precio mensual del plan seleccionado.',
+        ]);
+
+        try {
+            $billing->changePlan($workspace, $data['plan']);
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            return redirect()->route('perfil')->withErrors($exception->errors(), 'subscription');
+        } catch (\Illuminate\Http\Client\HttpClientException $exception) {
+            report($exception);
+
+            return redirect()->route('perfil')->withErrors([
+                'plan' => 'No pudimos confirmar el cambio con Stripe. Revisa el plan actual antes de volver a intentarlo.',
+            ], 'subscription');
+        }
+
+        return redirect()->route('perfil')->with('subscription_status', 'Tu plan se actualizó.');
     }
 
     private function workspace(Request $request): ClinicWorkspace

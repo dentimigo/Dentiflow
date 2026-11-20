@@ -26,7 +26,10 @@ class ProfileController extends Controller
         }
 
         if (in_array(session('access_role'), ['asistente', 'admin'], true)) {
+            $workspace = request()->attributes->get('clinic_workspace');
+
             return view('perfil.asistente', [
+                'billingWorkspace' => $workspace && (int) $workspace->owner_user_id === (int) $usuario->id ? $workspace : null,
                 'usuario' => $this->assistantProfileData($usuario),
                 'actividades' => $this->assistantActivities(),
                 'lastAccess' => $lastAccess,
