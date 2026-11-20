@@ -76,10 +76,15 @@ class AdminUsersTest extends TestCase
             'invite_role' => 'asistente',
         ])->assertRedirect(route('admin.users'))->assertSessionHas('invite_link');
         $url = session('invite_link');
+        $this->get($url)->assertOk()
+            ->assertSee('Esta cuenta ya pertenece al consultorio.')
+            ->assertSee('Cerrar sesión y crear otra cuenta')
+            ->assertDontSee('Aceptar con esta cuenta');
         $this->post($url)->assertSessionHasErrors('invitation');
 
-        auth()->logout();
-        $this->flushSession();
+        $this->post($url, ['invitation_switch_account' => '1'])->assertRedirect($url);
+        $this->assertGuest();
+        $this->get($url)->assertOk()->assertSee('Crear cuenta y aceptar');
         $this->post($url, ['invitation_login' => '1'])->assertRedirect(route('login'));
         $this->post('/login', ['email' => $recipient->email, 'password' => 'password'])->assertRedirect($url);
         $this->get($url)->assertOk()->assertSee('Consultorio Pedrito');

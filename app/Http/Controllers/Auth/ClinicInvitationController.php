@@ -18,7 +18,8 @@ class ClinicInvitationController extends Controller
     public function show(Request $request, string $invitation)
     {
         $invite = $this->findInvitation($invitation);
-        abort_unless(ClinicWorkspace::findOrFail($invite->clinic_workspace_id)->hasWorkspaceAccess(), 403, 'La agenda requiere activación.');
+        $workspace = ClinicWorkspace::findOrFail($invite->clinic_workspace_id);
+        abort_unless($workspace->hasWorkspaceAccess(), 403, 'La agenda requiere activación.');
 
         if ($request->user()) {
             $this->verifyRecipient($request->user(), $invite);
@@ -28,6 +29,9 @@ class ClinicInvitationController extends Controller
                 'invitedEmail' => $request->user()->email,
                 'acceptClinicInvitation' => true,
                 'clinicName' => $invite->clinic_name,
+                'canSwitchInvitationAccount' => $invite->email === null,
+                'alreadyInvitedMember' => $invite->email === null
+                    && $workspace->members()->whereKey($request->user()->id)->exists(),
             ]);
         }
 
@@ -51,6 +55,13 @@ class ClinicInvitationController extends Controller
         $data = [];
         if ($user) {
             $this->verifyRecipient($user, $invite);
+            if ($invite->email === null && $request->input('invitation_switch_account') === '1') {
+                Auth::logout();
+                $request->session()->invalidate();
+                $request->session()->regenerateToken();
+
+                return redirect()->to($request->fullUrl());
+            }
         } else {
             if ($request->input('invitation_login') === '1') {
                 $request->session()->put('clinic_invitation_url', $request->getRequestUri());

@@ -76,8 +76,15 @@
                     @endif
 
                     @if(!empty($acceptClinicInvitation))
-                        <p class="mb-5 text-sm text-slate-600">{{ $invitedEmail }}</p>
-                        <button type="submit" class="w-full rounded-xl bg-[#9700cf] py-3.5 text-sm font-bold text-white">Aceptar y entrar</button>
+                        <p class="mb-5 text-sm text-slate-600">Sesión actual: {{ $invitedEmail }}</p>
+                        @if(!empty($alreadyInvitedMember))
+                            <p class="mb-5 text-sm text-slate-600">Esta cuenta ya pertenece al consultorio. Si el enlace era para otra persona, puede abrirlo en su dispositivo o crear su cuenta aquí.</p>
+                        @else
+                            <button type="submit" class="w-full rounded-xl bg-[#9700cf] py-3.5 text-sm font-bold text-white">Aceptar con esta cuenta</button>
+                        @endif
+                        @if(!empty($canSwitchInvitationAccount))
+                            <button type="submit" name="invitation_switch_account" value="1" class="mt-3 w-full rounded-xl border border-[#ead2fb] bg-white px-4 py-3 text-sm font-bold text-[#9700cf]">Cerrar sesión y crear otra cuenta</button>
+                        @endif
                     @else
                     <div class="mb-6 flex items-center gap-3">
                         <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#ead2fb] text-[#9700cf]">
