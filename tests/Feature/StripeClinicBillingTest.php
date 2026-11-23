@@ -14,6 +14,27 @@ class StripeClinicBillingTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_owner_can_change_a_trial_plan_without_card_or_extending_the_trial(): void
+    {
+        config(['stripe.enabled' => true]);
+        Http::fake();
+
+        $owner = User::factory()->create();
+        $clinic = ClinicWorkspace::createForOwner($owner, 'Consultorio de prueba', trialRequired: true);
+        $trialEnd = now()->addDay()->startOfSecond();
+        $clinic->forceFill(['trial_plan' => 'basico', 'trial_ends_at' => $trialEnd])->save();
+        $this->actingAs($owner)->withSession(['clinic_workspace_id' => $clinic->id, 'access_role' => 'admin']);
+
+        $this->get(route('perfil'))->assertOk()->assertSee('Cambiar plan');
+        $this->post(route('perfil.subscription.change'), ['plan' => 'consultorio', 'confirm' => '1'])
+            ->assertRedirect(route('perfil'))->assertSessionHas('subscription_status');
+
+        $clinic->refresh();
+        $this->assertSame('consultorio', $clinic->trial_plan);
+        $this->assertEquals($trialEnd->timestamp, $clinic->trial_ends_at->timestamp);
+        Http::assertNothingSent();
+    }
+
     public function test_only_the_owner_can_change_plan_and_the_team_must_fit(): void
     {
         config([

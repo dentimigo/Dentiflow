@@ -80,7 +80,7 @@ class ClinicPlanController extends Controller
             'plan' => ['required', Rule::in(array_keys(ClinicWorkspace::TRIAL_PLANS))],
             'confirm' => ['accepted'],
         ], [
-            'confirm.accepted' => 'Confirma que aceptas el precio mensual del plan seleccionado.',
+            'confirm.accepted' => 'Confirma el cambio al plan seleccionado.',
         ]);
 
         try {

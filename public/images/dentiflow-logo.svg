@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 364 112" width="364" height="112" role="img" aria-labelledby="title">
+  <title id="title">DentiFlow</title>
+  <rect x="8" y="8" width="96" height="96" rx="26" fill="#512569"/>
+  <path d="M56 31c-8-5-17-7-24-2-8 6-9 16-5 25l7 16c3 8 5 15 10 15 5 0 5-10 8-16 2-4 6-4 8 0 3 6 3 16 8 16 5 0 7-7 10-15l7-16c4-9 3-19-5-25-7-5-16-3-24 2z" fill="#fff"/>
+  <path d="M27 56c10 2 15 0 23-6 9-7 19-9 34-5" fill="none" stroke="#B973E4" stroke-width="5" stroke-linecap="round"/>
+  <text x="122" y="73" font-family="Segoe UI, Arial, sans-serif" font-size="50" font-weight="700" letter-spacing="-2" fill="#291735">Denti<tspan fill="#792FA0">Flow</tspan></text>
+</svg>

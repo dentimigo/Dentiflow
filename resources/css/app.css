@@ -118,3 +118,99 @@
         padding: 1rem;
     }
 }
+
+.df-refresh[hidden] {
+    display: none;
+}
+
+.df-refresh {
+    position: relative;
+    display: grid;
+    gap: 1rem;
+    min-height: 64vh;
+    pointer-events: none;
+    color: #7220a0;
+}
+
+.df-refresh__status {
+    position: absolute;
+    z-index: 1;
+    inset: min(26vh, 220px) 0 auto;
+    justify-self: center;
+    display: grid;
+    justify-items: center;
+    gap: .5rem;
+    padding: 1rem 1.5rem;
+    border: 1px solid #e9cef8;
+    border-radius: 1.25rem;
+    background: #fff;
+    box-shadow: 0 12px 36px #601c911f;
+    font-size: .875rem;
+    font-weight: 700;
+}
+
+.df-refresh__tooth {
+    transform-origin: center;
+    animation: df-tooth-spin .9s ease-in-out infinite;
+}
+
+@keyframes df-tooth-spin {
+    0% { transform: rotate(0deg); opacity: .55; }
+    25%, 75% { opacity: 1; }
+    100% { transform: rotate(306deg); opacity: .55; }
+}
+
+.df-refresh__surface {
+    display: grid;
+    align-content: start;
+    gap: 1rem;
+    opacity: .8;
+}
+
+.df-refresh__panel {
+    display: grid;
+    gap: .9rem;
+    padding: 1rem;
+    border: 1px solid #ead8f5;
+    border-radius: 1rem;
+    background: #fff;
+}
+
+.df-refresh__grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .75rem;
+}
+
+.df-refresh__calendar {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: .35rem;
+}
+
+.df-refresh__block {
+    min-height: .85rem;
+    border-radius: .45rem;
+    background: #eaddf2;
+    animation: df-refresh-pulse 1.4s ease-in-out infinite alternate;
+}
+
+.df-refresh__heading { width: min(45%, 16rem); height: 1.8rem; }
+.df-refresh__caption { width: min(65%, 22rem); }
+.df-refresh__field { height: 2.5rem; }
+.df-refresh__metric { height: 4.25rem; }
+.df-refresh__day { height: 2.85rem; }
+.df-refresh__row { height: 2rem; }
+.df-refresh__row:nth-child(even) { opacity: .55; }
+
+@keyframes df-refresh-pulse {
+    to { background-color: #f4eaf9; }
+}
+
+@media (min-width: 900px) {
+    .df-refresh__metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .df-refresh__day { height: 3.7rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .df-refresh__tooth, .df-refresh__block { animation: none; }
+}

@@ -52,6 +52,16 @@ class ClinicWorkspace extends Model
         return $this->trial_required ? (self::TRIAL_PLANS[$this->trial_plan]['seats'] ?? null) : null;
     }
 
+    public function hasTrialWithoutCard(): bool
+    {
+        return $this->trial_required
+            && isset(self::TRIAL_PLANS[$this->trial_plan])
+            && ! $this->stripe_subscription_id
+            && ! $this->stripe_customer_id
+            && ! $this->stripe_checkout_id
+            && $this->trial_ends_at?->isFuture() === true;
+    }
+
     public static function createForOwner(User $owner, string $name, bool $trialRequired = false): self
     {
         return DB::transaction(function () use ($owner, $name, $trialRequired) {

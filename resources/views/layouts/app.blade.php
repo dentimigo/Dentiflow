@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es" style="margin:0;padding:0;">
 <head>
     <meta charset="UTF-8">
@@ -258,7 +258,10 @@
                 </form>
             </div>
         </header>
-        <main id="main-content" class="min-w-0 overflow-x-hidden p-3 sm:p-7 xl:p-9"><div class="mx-auto min-w-0 max-w-[1500px]">@yield('content')</div></main>
+        <main id="main-content" class="min-w-0 overflow-x-hidden p-3 sm:p-7 xl:p-9"><div class="mx-auto min-w-0 max-w-[1500px]">
+            <div id="df-refresh-content">@yield('content')</div>
+            @include('partials.refresh-loading')
+        </div></main>
     </div>
 </div>
 @stack('scripts')

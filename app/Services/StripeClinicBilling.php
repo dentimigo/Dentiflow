@@ -141,12 +141,20 @@ class StripeClinicBilling
     {
         DB::transaction(function () use ($workspace, $plan) {
             $workspace = ClinicWorkspace::query()->lockForUpdate()->findOrFail($workspace->id);
-            abort_unless($workspace->stripe_subscription_id && $workspace->stripe_customer_id && $workspace->hasWorkspaceAccess(), 403);
+            $trialWithoutCard = $workspace->hasTrialWithoutCard();
+            abort_unless($trialWithoutCard || ($workspace->stripe_subscription_id && $workspace->stripe_customer_id && $workspace->hasWorkspaceAccess()), 403);
 
             if ($workspace->members()->count() > ClinicWorkspace::TRIAL_PLANS[$plan]['seats']) {
                 throw ValidationException::withMessages([
                     'plan' => 'El plan seleccionado no tiene cupo para todos los integrantes del consultorio.',
                 ]);
+            }
+
+            if ($trialWithoutCard) {
+                $workspace->trial_plan = $plan;
+                $workspace->save();
+
+                return;
             }
 
             $api = $this->api();

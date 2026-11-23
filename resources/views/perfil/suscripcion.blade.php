@@ -5,6 +5,7 @@
     $trialing = $workspace->stripe_status === 'trialing' || (! $workspace->stripe_subscription_id && $workspace->trial_ends_at?->isFuture());
     $until = $trialing ? $workspace->trial_ends_at : $workspace->stripe_paid_until;
     $canManage = config('stripe.enabled') && $workspace->stripe_customer_id;
+    $trialWithoutCard = $workspace->hasTrialWithoutCard();
 @endphp
 
 <section class="mt-6 rounded-3xl border border-[#ead2fb] bg-white p-6 shadow-[0_18px_60px_rgba(81,37,105,.08)]" aria-labelledby="subscription-heading">
@@ -46,7 +47,7 @@
         </form>
     @endif
 
-    @if ($canManage && $workspace->stripe_subscription_id && $currentPlan)
+    @if ($currentPlan && ($trialWithoutCard || ($canManage && $workspace->stripe_subscription_id)))
         <form method="POST" action="{{ route('perfil.subscription.change') }}" class="mt-5 space-y-3 border-t border-[#ead2fb] pt-5">
             @csrf
             <label for="subscription-plan" class="block font-semibold text-slate-900">Cambiar plan</label>
@@ -59,10 +60,12 @@
                     </option>
                 @endforeach
             </select>
-            <p class="text-sm text-slate-600">El cupo cambia al confirmar. La tarifa nueva se aplica en el siguiente cobro y la fecha de cobro se conserva.</p>
+            <p class="text-sm text-slate-600">{{ $trialWithoutCard
+                ? 'El cupo cambia al confirmar. Tu prueba conserva la misma fecha de vencimiento. No se registra una tarjeta ni se hace un cobro.'
+                : 'El cupo cambia al confirmar. La tarifa nueva se aplica en el siguiente cobro y la fecha de cobro se conserva.' }}</p>
             <label class="flex items-center gap-2 text-sm text-slate-700">
                 <input type="checkbox" name="confirm" value="1" required>
-                Acepto el precio mensual del plan seleccionado.
+                {{ $trialWithoutCard ? 'Confirmo el cambio de plan durante mi prueba.' : 'Acepto el precio mensual del plan seleccionado.' }}
             </label>
             <button class="rounded-xl bg-[#9700cf] px-4 py-2 text-sm font-bold text-white">Confirmar cambio</button>
         </form>
