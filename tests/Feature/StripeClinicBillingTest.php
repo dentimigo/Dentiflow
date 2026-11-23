@@ -153,13 +153,21 @@ class StripeClinicBillingTest extends TestCase
             'api.stripe.com/v1/customers' => Http::response(['id' => 'cus_Example']),
             'api.stripe.com/v1/checkout/sessions' => Http::sequence()
                 ->push(['id' => 'cs_test_Credit', 'url' => 'https://checkout.stripe.com/c/pay/cs_test_Credit'])
-                ->push(['id' => 'cs_test_Debit', 'url' => 'https://checkout.stripe.com/c/pay/cs_test_Debit']),
+                ->push(['id' => 'cs_test_Debit', 'url' => 'https://checkout.stripe.com/c/pay/cs_test_Debit'])
+                ->push(['id' => 'cs_test_Renewal', 'url' => 'https://checkout.stripe.com/c/pay/cs_test_Renewal']),
             'api.stripe.com/v1/checkout/sessions/cs_test_Credit*' => Http::response($setup),
             'api.stripe.com/v1/checkout/sessions/cs_test_Debit*' => Http::response($debitSetup),
             'api.stripe.com/v1/subscriptions' => Http::response($subscription),
             'api.stripe.com/v1/subscriptions/*' => Http::sequence()
                 ->push(array_replace($subscription, ['status' => 'active', 'latest_invoice' => ['status' => 'paid', 'amount_paid' => $amount]]))
-                ->push(array_replace($subscription, ['status' => 'past_due'])),
+                ->push(array_replace($subscription, ['status' => 'past_due']))
+                ->push(array_replace($subscription, ['status' => 'canceled']))
+                ->push(array_replace($subscription, [
+                    'id' => 'sub_Renewal',
+                    'status' => 'active',
+                    'trial_end' => null,
+                    'latest_invoice' => ['status' => 'paid', 'amount_paid' => $amount],
+                ])),
         ]);
 
         $this->actingAs($owner)->withSession(['clinic_workspace_id' => $clinic->id]);
@@ -195,6 +203,27 @@ class StripeClinicBillingTest extends TestCase
         $this->assertTrue($clinic->fresh()->hasWorkspaceAccess());
         $this->event('invoice.payment_failed', ['parent' => ['subscription_details' => ['subscription' => 'sub_Example']]])->assertNoContent();
         $this->get(route('reportes.export'))->assertRedirect(route('clinic.plan'));
+        $this->get(route('citas.create'))->assertRedirect(route('clinic.plan'));
+        $this->postJson(route('citas.store'))->assertForbidden()
+            ->assertJsonPath('renewal_url', route('clinic.plan'));
+        $this->get(route('clinic.plan'))->assertOk()
+            ->assertSee('Renueva tu plan')->assertSee('Actualizar tarjeta de débito');
+
+        $this->event('customer.subscription.deleted', ['id' => 'sub_Example'])->assertNoContent();
+        $this->post(route('citas.store'))->assertRedirect(route('clinic.plan'));
+        $this->get(route('clinic.plan'))->assertOk()
+            ->assertSee('Renovar plan en Stripe')->assertDontSee('Actualizar tarjeta de débito');
+        $this->post(route('clinic.plan.start'), ['plan' => $plan])
+            ->assertRedirect('https://checkout.stripe.com/c/pay/cs_test_Renewal');
+        Http::assertSent(fn (Request $request) => $request->url() === 'https://api.stripe.com/v1/checkout/sessions'
+            && $request['mode'] === 'subscription'
+            && $request['payment_method_collection'] === 'always');
+        $this->post(route('citas.store'))->assertRedirect(route('clinic.plan'));
+
+        $this->event('checkout.session.completed', [
+            'id' => 'cs_test_Renewal', 'mode' => 'subscription', 'status' => 'complete', 'subscription' => 'sub_Renewal',
+        ])->assertNoContent();
+        $this->assertTrue($clinic->fresh()->hasWorkspaceAccess());
     }
 
     public static function plans(): array

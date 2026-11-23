@@ -17,7 +17,7 @@
         </header>
         <section class="rounded-2xl border border-[#ead2fb] bg-white p-6 shadow-sm sm:p-8">
             <p class="text-sm font-semibold text-[#512569]">{{ $workspace->name }}</p>
-            @if ($isOwner && $stripeEnabled && $workspace->stripe_subscription_id)
+            @if ($isOwner && $stripeEnabled && $workspace->stripe_subscription_id && $workspace->hasWorkspaceAccess())
                 <form method="POST" action="{{ route('clinic.plan.portal') }}" class="mt-3">
                     @csrf
                     <button class="text-sm font-bold text-[#512569] underline">Gestionar o cancelar suscripción</button>
@@ -31,19 +31,33 @@
                 <p class="mt-3 text-sm text-slate-600">Termina el {{ $workspace->trial_ends_at->format('d/m/Y H:i') }} ({{ config('app.timezone') }}).</p>
                 <a href="{{ route('inicio') }}" class="mt-5 inline-block rounded-xl bg-[#9700cf] px-5 py-3 text-sm font-bold text-white">Abrir agenda</a>
             @elseif (! $isOwner)
-                <h1 class="mt-2 text-3xl font-bold">La agenda requiere activación</h1>
-                <p class="mt-3 text-sm text-slate-600">Pídele al titular del consultorio que active la agenda.</p>
+                <h1 class="mt-2 text-3xl font-bold">La agenda está bloqueada</h1>
+                <p class="mt-3 text-sm text-slate-600">Pídele al titular del consultorio que active o renueve el plan para volver a agendar citas y hacer cambios.</p>
             @else
-                <h1 class="mt-2 text-3xl font-bold">{{ $workspace->trial_ends_at ? 'Tu prueba de 3 días terminó' : 'Elige el plan que quieres probar' }}</h1>
-                @if ($workspace->stripe_subscription_id && $workspace->stripe_status !== 'canceled')
-                    <p class="mt-3 text-sm text-slate-600">Tus datos siguen guardados. Consulta tu suscripción y actualiza el método de pago en Stripe.</p>
-                @elseif ($workspace->trial_ends_at && ! $stripeEnabled)
-                    <p class="mt-3 text-sm text-slate-600">Tus citas y expedientes siguen guardados. El pago para reactivar la agenda aún no está disponible.</p>
+                @php
+                    $renewing = $workspace->trial_ends_at !== null || $workspace->stripe_status === 'canceled';
+                    $hasExistingSubscription = $workspace->stripe_subscription_id && $workspace->stripe_status !== 'canceled';
+                @endphp
+                <h1 class="mt-2 text-3xl font-bold">{{ $renewing || $hasExistingSubscription ? 'Renueva tu plan' : 'Elige el plan que quieres probar' }}</h1>
+                @if ($renewing || $hasExistingSubscription)
+                    <p class="mt-3 text-sm text-slate-600">Tus citas y expedientes siguen guardados. Para agendar o hacer cambios, primero debes reactivar tu suscripción.</p>
+                @endif
+                @if (($renewing || $hasExistingSubscription) && ! $stripeEnabled)
+                    @if ($workspace->trial_ends_at && ! $workspace->stripe_status)
+                        <p class="mt-3 text-sm text-slate-600">Tu prueba de 3 días terminó.</p>
+                    @endif
+                    <p class="mt-3 text-sm text-slate-600">El pago para reactivar la agenda aún no está disponible.</p>
+                @elseif ($hasExistingSubscription)
+                    <p class="mt-3 text-sm text-slate-600">Si quitaste tu tarjeta o el cobro falló, vuelve a agregar una tarjeta de débito en Stripe y revisa si hay un pago pendiente. La agenda se habilitará cuando Stripe confirme el pago.</p>
+                    <form method="POST" action="{{ route('clinic.plan.portal') }}" class="mt-5">
+                        @csrf
+                        <button class="rounded-xl bg-[#9700cf] px-5 py-3 text-sm font-bold text-white">Actualizar tarjeta de débito</button>
+                    </form>
                 @else
-                    @if ($stripeEnabled && ! $workspace->trial_ends_at)
+                    @if ($stripeEnabled && ! $renewing)
                         <p class="mt-3 text-sm text-slate-600">Hoy pagas $0. Registra una tarjeta de débito en Stripe para iniciar tu prueba de 72 horas. Al terminar, se cobra el plan seleccionado cada mes hasta que canceles.</p>
                     @elseif ($stripeEnabled)
-                        <p class="mt-3 text-sm text-slate-600">Elige un plan para reactivar tu agenda. El primer cobro se realiza al confirmar en Stripe.</p>
+                        <p class="mt-3 text-sm text-slate-600">Elige un plan y vuelve a registrar tu tarjeta de débito en Stripe. El primer cobro se realiza al confirmar y la agenda se habilita cuando Stripe confirma el pago.</p>
                     @else
                         <p class="mt-3 text-sm text-slate-600">Hoy pagas $0. La prueba dura 72 horas desde que confirmas. El precio mensual aplica si decides continuar después.</p>
                     @endif
@@ -70,7 +84,7 @@
                                 </label>
                             @endforeach
                         </fieldset>
-                        <button class="mt-5 rounded-xl bg-[#9700cf] px-5 py-3 text-sm font-bold text-white">{{ $stripeEnabled ? ($workspace->trial_ends_at ? 'Continuar al pago' : 'Registrar débito e iniciar prueba') : 'Iniciar mis 3 días gratis' }}</button>
+                        <button class="mt-5 rounded-xl bg-[#9700cf] px-5 py-3 text-sm font-bold text-white">{{ $stripeEnabled ? ($renewing ? 'Renovar plan en Stripe' : 'Registrar débito e iniciar prueba') : 'Iniciar mis 3 días gratis' }}</button>
                     </form>
                 @endif
             @endif
