@@ -21,7 +21,7 @@ class StripeWebhookController extends Controller
             abort(400, 'Firma de Stripe inválida.');
         }
 
-        abort_unless($event->livemode === false, 400);
+        abort_unless($event->livemode === config('stripe.live'), 400);
 
         $object = $event->data->object->toArray();
         if ($event->type === 'checkout.session.completed' && ($object['mode'] ?? null) === 'setup'
@@ -34,7 +34,8 @@ class StripeWebhookController extends Controller
         $subscriptionId = match ($event->type) {
             'checkout.session.completed' => ($object['mode'] ?? null) === 'subscription'
                 && ($object['status'] ?? null) === 'complete' ? ($object['subscription'] ?? null) : null,
-            'customer.subscription.updated', 'customer.subscription.deleted' => $object['id'] ?? null,
+            'customer.subscription.updated', 'customer.subscription.deleted',
+            'customer.subscription.paused', 'customer.subscription.resumed' => $object['id'] ?? null,
             'invoice.paid', 'invoice.payment_failed' => data_get($object, 'parent.subscription_details.subscription')
                 ?? ($object['subscription'] ?? null),
             default => null,
