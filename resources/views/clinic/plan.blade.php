@@ -68,13 +68,15 @@
                     @else
                         <p class="mt-3 text-sm text-slate-600">Hoy pagas $0. La prueba dura 72 horas desde que confirmas. El precio mensual aplica si decides continuar después.</p>
                     @endif
-                    @if ($stripeConfirmationFailed)
-                        <p class="mt-3 text-sm text-fuchsia-700" role="alert">Hubo un problema al verificar tu registro con Stripe. Actualiza esta página para volver a verificar el mismo intento.</p>
+                    @if ($stripeConfirmationError)
+                        <p class="mt-3 text-sm text-fuchsia-700" role="alert">Hubo un problema al verificar tu registro con Stripe. Referencia: <code>{{ $stripeConfirmationError }}</code></p>
+                        <a class="mt-5 inline-block rounded-xl bg-[#9700cf] px-5 py-3 text-sm font-bold text-white" href="{{ route('clinic.plan', ['stripe' => 'regreso']) }}">Reintentar confirmación</a>
                     @elseif ($stripeEnabled && $workspace->stripe_status === 'debit_required')
                         <p class="mt-3 text-sm text-fuchsia-700" role="alert">Stripe no pudo confirmar que la tarjeta fuera de débito. Intenta con otra tarjeta de débito para iniciar tu prueba.</p>
                     @elseif ($stripeEnabled && request('stripe') === 'regreso')
                         <p class="mt-3 text-sm text-slate-600">Estamos esperando la confirmación de Stripe. Actualiza esta página en unos segundos.</p>
                     @endif
+                    @unless ($stripeConfirmationError)
                     <form method="POST" action="{{ route('clinic.plan.start') }}" class="mt-6">
                         @csrf
                         @error('plan')
@@ -95,6 +97,7 @@
                         </fieldset>
                         <button class="mt-5 rounded-xl bg-[#9700cf] px-5 py-3 text-sm font-bold text-white">{{ $stripeEnabled ? ($renewing ? 'Renovar plan en Stripe' : 'Registrar débito e iniciar prueba') : 'Iniciar mis 3 días gratis' }}</button>
                     </form>
+                    @endunless
                 @endif
             @endif
         </section>

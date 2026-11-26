@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\ClinicWorkspace;
 use App\Services\StripeClinicBilling;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Throwable;
 
 class ClinicPlanController extends Controller
@@ -20,7 +22,7 @@ class ClinicPlanController extends Controller
 
         $isOwner = (int) $workspace->owner_user_id === (int) $request->user()->id;
         $stripeEnabled = (bool) config('stripe.enabled');
-        $stripeConfirmationFailed = false;
+        $stripeConfirmationError = null;
 
         if ($isOwner && $stripeEnabled && $request->query('stripe') === 'regreso'
             && $workspace->stripe_checkout_id && ! $workspace->stripe_subscription_id
@@ -30,7 +32,20 @@ class ClinicPlanController extends Controller
                 $workspace->refresh();
             } catch (Throwable $exception) {
                 report($exception);
-                $stripeConfirmationFailed = true;
+                $stripeConfirmationError = class_basename($exception);
+                if ($exception instanceof RequestException) {
+                    $stripeConfirmationError = 'Stripe HTTP '.$exception->response->status();
+                    foreach (['error.code', 'error.param'] as $field) {
+                        $value = $exception->response->json($field);
+                        if (is_string($value) && preg_match('/^[a-z_][a-z0-9_.\[\]]{0,79}$/D', $value)) {
+                            $stripeConfirmationError .= ' / '.$value;
+                        }
+                    }
+                } elseif ($exception instanceof HttpExceptionInterface) {
+                    $stripeConfirmationError .= ' HTTP '.$exception->getStatusCode();
+                } elseif ($exception instanceof \Illuminate\Database\QueryException) {
+                    $stripeConfirmationError .= ' SQLSTATE '.($exception->errorInfo[0] ?? 'unknown');
+                }
             }
         }
 
@@ -39,7 +54,7 @@ class ClinicPlanController extends Controller
             'isOwner' => $isOwner,
             'plans' => ClinicWorkspace::TRIAL_PLANS,
             'stripeEnabled' => $stripeEnabled,
-            'stripeConfirmationFailed' => $stripeConfirmationFailed,
+            'stripeConfirmationError' => $stripeConfirmationError,
         ]);
     }
 
