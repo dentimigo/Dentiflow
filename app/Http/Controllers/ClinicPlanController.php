@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ClinicWorkspace;
 use App\Services\StripeClinicBilling;
+use Illuminate\Http\Client\HttpClientException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -74,7 +75,18 @@ class ClinicPlanController extends Controller
                 return redirect()->route('inicio');
             }
 
-            return redirect()->away($billing->checkout($workspace, $data['plan'], $request->user()->email));
+            try {
+                return redirect()->away($billing->checkout($workspace, $data['plan'], $request->user()->email));
+            } catch (HttpClientException $exception) {
+                report($exception);
+                $reference = $exception instanceof RequestException
+                    ? 'Stripe HTTP '.$exception->response->status()
+                    : 'Conexión con Stripe';
+
+                return redirect()->route('clinic.plan')->withErrors([
+                    'plan' => 'No pudimos abrir la página de pago. Referencia: '.$reference,
+                ]);
+            }
         }
 
         return DB::transaction(function () use ($workspace, $data) {

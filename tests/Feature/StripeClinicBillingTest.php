@@ -154,6 +154,7 @@ class StripeClinicBillingTest extends TestCase
             'api.stripe.com/v1/checkout/sessions' => Http::sequence()
                 ->push(['id' => 'cs_test_Credit', 'url' => 'https://checkout.stripe.com/c/pay/cs_test_Credit'])
                 ->push(['id' => 'cs_test_Debit', 'url' => 'https://checkout.stripe.com/c/pay/cs_test_Debit'])
+                ->push(['error' => ['message' => 'Checkout temporarily unavailable']], 503)
                 ->push(['id' => 'cs_test_Renewal', 'url' => 'https://checkout.stripe.com/c/pay/cs_test_Renewal']),
             'api.stripe.com/v1/checkout/sessions/cs_test_Credit*' => Http::response($setup),
             'api.stripe.com/v1/checkout/sessions/cs_test_Debit*' => Http::sequence()
@@ -258,6 +259,12 @@ class StripeClinicBillingTest extends TestCase
         $this->post(route('citas.store'))->assertRedirect(route('clinic.plan'));
         $this->get(route('clinic.plan'))->assertOk()
             ->assertSee('Renovar plan en Stripe')->assertDontSee('Actualizar tarjeta de débito');
+        $this->post(route('clinic.plan.start'), ['plan' => $plan])
+            ->assertRedirect(route('clinic.plan'))
+            ->assertSessionHasErrors('plan');
+        $this->get(route('clinic.plan'))->assertOk()->assertSee('Stripe HTTP 503');
+        $this->assertSame('canceled', $clinic->fresh()->stripe_status);
+
         $this->post(route('clinic.plan.start'), ['plan' => $plan])
             ->assertRedirect('https://checkout.stripe.com/c/pay/cs_test_Renewal');
         Http::assertSent(fn (Request $request) => $request->url() === 'https://api.stripe.com/v1/checkout/sessions'
