@@ -85,17 +85,14 @@
                         <fieldset class="grid gap-3 sm:grid-cols-2">
                             <legend class="sr-only">Planes disponibles</legend>
                             @foreach ($plans as $key => $plan)
-                                <label class="flex cursor-pointer gap-3 rounded-xl border border-[#ead2fb] p-4">
-                                    <input class="mt-1" type="radio" name="plan" value="{{ $key }}" required @checked(old('plan') === $key)>
-                                    <span>
-                                        <span class="block font-bold">{{ $plan['name'] }}</span>
-                                        <span class="mt-1 block text-sm">${{ $plan['price'] }} MXN al mes</span>
-                                        <span class="mt-1 block text-sm text-slate-600">Hasta {{ $plan['seats'] }} personas, incluido el titular</span>
-                                    </span>
-                                </label>
+                                <button type="submit" name="plan" value="{{ $key }}" class="rounded-xl border border-[#ead2fb] p-4 text-left hover:bg-fuchsia-50">
+                                    <span class="block font-bold">{{ $plan['name'] }}</span>
+                                    <span class="mt-1 block text-sm">${{ $plan['price'] }} MXN al mes</span>
+                                    <span class="mt-1 block text-sm text-slate-600">Hasta {{ $plan['seats'] }} personas, incluido el titular</span>
+                                    <span class="mt-3 block text-sm font-bold text-[#9700cf]">{{ $stripeEnabled ? ($renewing ? 'Renovar plan en Stripe' : 'Registrar débito e iniciar prueba') : 'Iniciar mis 3 días gratis' }}</span>
+                                </button>
                             @endforeach
                         </fieldset>
-                        <button class="mt-5 rounded-xl bg-[#9700cf] px-5 py-3 text-sm font-bold text-white">{{ $stripeEnabled ? ($renewing ? 'Renovar plan en Stripe' : 'Registrar débito e iniciar prueba') : 'Iniciar mis 3 días gratis' }}</button>
                     </form>
                     @endunless
                 @endif

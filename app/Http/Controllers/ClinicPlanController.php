@@ -24,8 +24,7 @@ class ClinicPlanController extends Controller
         $stripeEnabled = (bool) config('stripe.enabled');
         $stripeConfirmationError = null;
 
-        if ($isOwner && $stripeEnabled && $request->query('stripe') === 'regreso'
-            && $workspace->stripe_checkout_id && ! $workspace->stripe_subscription_id
+        if ($isOwner && $stripeEnabled && $workspace->stripe_checkout_id && ! $workspace->stripe_subscription_id
             && $workspace->trial_ends_at === null) {
             try {
                 $billing->completeDebitSetup($workspace->stripe_checkout_id);

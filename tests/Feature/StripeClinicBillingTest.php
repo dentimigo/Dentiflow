@@ -178,6 +178,9 @@ class StripeClinicBillingTest extends TestCase
         ]);
 
         $this->actingAs($owner)->withSession(['clinic_workspace_id' => $clinic->id]);
+        $this->get(route('clinic.plan'))->assertOk()
+            ->assertSee('type="submit" name="plan" value="basico"', false)
+            ->assertSee('type="submit" name="plan" value="consultorio"', false);
         $this->post(route('clinic.plan.start'), ['plan' => $plan])
             ->assertRedirect('https://checkout.stripe.com/c/pay/cs_test_Credit');
         Http::assertSent(fn (Request $request) => $request->url() === 'https://api.stripe.com/v1/checkout/sessions'
@@ -197,7 +200,7 @@ class StripeClinicBillingTest extends TestCase
         $this->post(route('clinic.plan.start'), ['plan' => $plan])
             ->assertRedirect('https://checkout.stripe.com/c/pay/cs_test_Debit');
         $this->assertNull($clinic->fresh()->stripe_status);
-        $this->get(route('clinic.plan', ['stripe' => 'regreso']))
+        $this->get(route('clinic.plan'))
             ->assertOk()->assertSee('Stripe HTTP 503')->assertSee('Reintentar confirmación')
             ->assertDontSee('Registrar débito e iniciar prueba');
         $this->assertSame('cs_test_Debit', $clinic->fresh()->stripe_checkout_id);
