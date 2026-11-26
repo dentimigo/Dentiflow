@@ -74,6 +74,9 @@ class StripeClinicBilling
                 ])->throw()->json();
 
             $workspace->stripe_checkout_id = $session['id'];
+            if ($workspace->stripe_status === 'debit_required') {
+                $workspace->stripe_status = null;
+            }
             $workspace->save();
 
             return $this->stripeUrl($session['url'], 'checkout.stripe.com');

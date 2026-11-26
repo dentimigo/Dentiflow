@@ -194,6 +194,9 @@ class StripeClinicBillingTest extends TestCase
 
         $this->post(route('clinic.plan.start'), ['plan' => $plan])
             ->assertRedirect('https://checkout.stripe.com/c/pay/cs_test_Debit');
+        $this->assertNull($clinic->fresh()->stripe_status);
+        $this->get(route('clinic.plan', ['stripe' => 'regreso']))
+            ->assertOk()->assertSee('Tu prueba está activa')->assertDontSee('Stripe no pudo confirmar');
         $checkout['id'] = 'cs_test_Debit';
         $this->event('checkout.session.completed', $checkout)->assertNoContent();
         $this->event('checkout.session.completed', $checkout)->assertNoContent();

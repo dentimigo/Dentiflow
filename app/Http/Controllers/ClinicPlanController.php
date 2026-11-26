@@ -4,24 +4,39 @@ namespace App\Http\Controllers;
 
 use App\Models\ClinicWorkspace;
 use App\Services\StripeClinicBilling;
+use Illuminate\Http\Client\HttpClientException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class ClinicPlanController extends Controller
 {
-    public function show(Request $request)
+    public function show(Request $request, StripeClinicBilling $billing)
     {
         $workspace = $this->workspace($request);
         if (! $workspace->trial_required) {
             return redirect()->route('inicio');
         }
 
+        $isOwner = (int) $workspace->owner_user_id === (int) $request->user()->id;
+        $stripeEnabled = (bool) config('stripe.enabled');
+
+        if ($isOwner && $stripeEnabled && $request->query('stripe') === 'regreso'
+            && $workspace->stripe_checkout_id && ! $workspace->stripe_subscription_id
+            && $workspace->trial_ends_at === null) {
+            try {
+                $billing->completeDebitSetup($workspace->stripe_checkout_id);
+                $workspace->refresh();
+            } catch (HttpClientException $exception) {
+                report($exception);
+            }
+        }
+
         return view('clinic.plan', [
             'workspace' => $workspace,
-            'isOwner' => (int) $workspace->owner_user_id === (int) $request->user()->id,
+            'isOwner' => $isOwner,
             'plans' => ClinicWorkspace::TRIAL_PLANS,
-            'stripeEnabled' => (bool) config('stripe.enabled'),
+            'stripeEnabled' => $stripeEnabled,
         ]);
     }
 
