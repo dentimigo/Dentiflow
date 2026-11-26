@@ -17,6 +17,9 @@
         </header>
         <section class="rounded-2xl border border-[#ead2fb] bg-white p-6 shadow-sm sm:p-8">
             <p class="text-sm font-semibold text-[#512569]">{{ $workspace->name }}</p>
+            @error('portal', 'subscription')
+                <p role="alert" class="mt-3 text-sm text-fuchsia-700">{{ $message }}</p>
+            @enderror
             @if ($isOwner && $stripeEnabled && $workspace->stripe_subscription_id && $workspace->hasWorkspaceAccess())
                 <form method="POST" action="{{ route('clinic.plan.portal') }}" class="mt-3">
                     @csrf

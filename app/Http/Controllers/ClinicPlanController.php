@@ -101,7 +101,18 @@ class ClinicPlanController extends Controller
 
         $returnRoute = $workspace->hasWorkspaceAccess() ? 'perfil' : 'clinic.plan';
 
-        return redirect()->away($billing->portal($workspace, route($returnRoute)));
+        try {
+            return redirect()->away($billing->portal($workspace, route($returnRoute)));
+        } catch (\Illuminate\Http\Client\HttpClientException $exception) {
+            report($exception);
+            $reference = $exception instanceof RequestException
+                ? 'Stripe HTTP '.$exception->response->status()
+                : 'Conexión con Stripe';
+
+            return redirect()->route($returnRoute)->withErrors([
+                'portal' => 'No se pudo abrir el portal de Stripe. La cancelación no se realizó desde DentiFlow. Referencia: '.$reference,
+            ], 'subscription');
+        }
     }
 
     public function change(Request $request, StripeClinicBilling $billing)

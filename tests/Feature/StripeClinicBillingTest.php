@@ -160,6 +160,9 @@ class StripeClinicBillingTest extends TestCase
                 ->pushStatus(503)
                 ->push($debitSetup),
             'api.stripe.com/v1/subscriptions' => Http::response($subscription),
+            'api.stripe.com/v1/billing_portal/sessions' => Http::sequence()
+                ->pushStatus(400)
+                ->push(['url' => 'https://billing.stripe.com/p/session/test']),
             'api.stripe.com/v1/subscriptions/*' => Http::sequence()
                 ->push(array_replace($subscription, ['status' => 'active', 'latest_invoice' => ['status' => 'paid', 'amount_paid' => $amount]]))
                 ->push(array_replace($subscription, [
@@ -214,6 +217,11 @@ class StripeClinicBillingTest extends TestCase
             && $request['default_payment_method'] === 'pm_Example'
             && $request['items'][0]['price'] === $price['id']);
         $this->assertTrue($clinic->fresh()->hasWorkspaceAccess());
+
+        $this->post(route('clinic.plan.portal'))->assertRedirect(route('perfil'))
+            ->assertSessionHasErrorsIn('subscription', 'portal');
+        $this->post(route('clinic.plan.portal'))
+            ->assertRedirect('https://billing.stripe.com/p/session/test');
 
         $this->event('customer.subscription.updated', ['id' => 'sub_Example'])->assertNoContent();
         $this->assertSame('active', $clinic->fresh()->stripe_status);
