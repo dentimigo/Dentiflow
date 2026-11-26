@@ -68,7 +68,9 @@
                     @else
                         <p class="mt-3 text-sm text-slate-600">Hoy pagas $0. La prueba dura 72 horas desde que confirmas. El precio mensual aplica si decides continuar después.</p>
                     @endif
-                    @if ($stripeEnabled && $workspace->stripe_status === 'debit_required')
+                    @if ($stripeConfirmationFailed)
+                        <p class="mt-3 text-sm text-fuchsia-700" role="alert">Hubo un problema al verificar tu registro con Stripe. Actualiza esta página para volver a verificar el mismo intento.</p>
+                    @elseif ($stripeEnabled && $workspace->stripe_status === 'debit_required')
                         <p class="mt-3 text-sm text-fuchsia-700" role="alert">Stripe no pudo confirmar que la tarjeta fuera de débito. Intenta con otra tarjeta de débito para iniciar tu prueba.</p>
                     @elseif ($stripeEnabled && request('stripe') === 'regreso')
                         <p class="mt-3 text-sm text-slate-600">Estamos esperando la confirmación de Stripe. Actualiza esta página en unos segundos.</p>

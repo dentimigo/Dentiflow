@@ -4,10 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\ClinicWorkspace;
 use App\Services\StripeClinicBilling;
-use Illuminate\Http\Client\HttpClientException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Throwable;
 
 class ClinicPlanController extends Controller
 {
@@ -20,6 +20,7 @@ class ClinicPlanController extends Controller
 
         $isOwner = (int) $workspace->owner_user_id === (int) $request->user()->id;
         $stripeEnabled = (bool) config('stripe.enabled');
+        $stripeConfirmationFailed = false;
 
         if ($isOwner && $stripeEnabled && $request->query('stripe') === 'regreso'
             && $workspace->stripe_checkout_id && ! $workspace->stripe_subscription_id
@@ -27,8 +28,9 @@ class ClinicPlanController extends Controller
             try {
                 $billing->completeDebitSetup($workspace->stripe_checkout_id);
                 $workspace->refresh();
-            } catch (HttpClientException $exception) {
+            } catch (Throwable $exception) {
                 report($exception);
+                $stripeConfirmationFailed = true;
             }
         }
 
@@ -37,6 +39,7 @@ class ClinicPlanController extends Controller
             'isOwner' => $isOwner,
             'plans' => ClinicWorkspace::TRIAL_PLANS,
             'stripeEnabled' => $stripeEnabled,
+            'stripeConfirmationFailed' => $stripeConfirmationFailed,
         ]);
     }
 

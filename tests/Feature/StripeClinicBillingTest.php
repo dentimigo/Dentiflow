@@ -156,7 +156,9 @@ class StripeClinicBillingTest extends TestCase
                 ->push(['id' => 'cs_test_Debit', 'url' => 'https://checkout.stripe.com/c/pay/cs_test_Debit'])
                 ->push(['id' => 'cs_test_Renewal', 'url' => 'https://checkout.stripe.com/c/pay/cs_test_Renewal']),
             'api.stripe.com/v1/checkout/sessions/cs_test_Credit*' => Http::response($setup),
-            'api.stripe.com/v1/checkout/sessions/cs_test_Debit*' => Http::response($debitSetup),
+            'api.stripe.com/v1/checkout/sessions/cs_test_Debit*' => Http::sequence()
+                ->pushStatus(503)
+                ->push($debitSetup),
             'api.stripe.com/v1/subscriptions' => Http::response($subscription),
             'api.stripe.com/v1/subscriptions/*' => Http::sequence()
                 ->push(array_replace($subscription, ['status' => 'active', 'latest_invoice' => ['status' => 'paid', 'amount_paid' => $amount]]))
@@ -195,6 +197,9 @@ class StripeClinicBillingTest extends TestCase
         $this->post(route('clinic.plan.start'), ['plan' => $plan])
             ->assertRedirect('https://checkout.stripe.com/c/pay/cs_test_Debit');
         $this->assertNull($clinic->fresh()->stripe_status);
+        $this->get(route('clinic.plan', ['stripe' => 'regreso']))
+            ->assertOk()->assertSee('Hubo un problema al verificar tu registro con Stripe');
+        $this->assertSame('cs_test_Debit', $clinic->fresh()->stripe_checkout_id);
         $this->get(route('clinic.plan', ['stripe' => 'regreso']))
             ->assertOk()->assertSee('Tu prueba está activa')->assertDontSee('Stripe no pudo confirmar');
         $checkout['id'] = 'cs_test_Debit';
