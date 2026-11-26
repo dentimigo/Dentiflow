@@ -41,9 +41,9 @@
                     $renewing = $workspace->trial_ends_at !== null || in_array($workspace->stripe_status, ['canceled', 'incomplete_expired'], true);
                     $hasExistingSubscription = $workspace->hasRecoverableStripeSubscription();
                 @endphp
-                <h1 class="mt-2 text-3xl font-bold">{{ $renewing || $hasExistingSubscription ? 'Renueva tu plan' : 'Elige el plan que quieres probar' }}</h1>
+                <h1 class="mt-2 text-3xl font-bold">{{ $workspace->stripe_cancellation_pending ? 'Tu renovación está cancelada' : ($renewing || $hasExistingSubscription ? 'Renueva tu plan' : 'Elige el plan que quieres probar') }}</h1>
                 @if ($renewing || $hasExistingSubscription)
-                    <p class="mt-3 text-sm text-slate-600">Tus citas y expedientes siguen guardados. Reactiva tu suscripción para volver a usar el consultorio.</p>
+                    <p class="mt-3 text-sm text-slate-600">Tus citas y expedientes siguen guardados. Puedes reactivar el acceso cuando quieras.</p>
                 @endif
                 @if (($renewing || $hasExistingSubscription) && ! $stripeEnabled)
                     @if ($workspace->trial_ends_at && ! $workspace->stripe_status)

@@ -169,7 +169,7 @@ class StripeClinicBillingTest extends TestCase
                 ->push(array_replace($subscription, [
                     'status' => 'active',
                     'cancel_at_period_end' => true,
-                    'latest_invoice' => ['status' => 'paid', 'amount_paid' => $amount],
+                    'latest_invoice' => ['status' => 'draft', 'amount_paid' => 0],
                 ]))
                 ->push(array_replace($subscription, ['status' => 'past_due']))
                 ->push(array_replace($subscription, ['status' => 'canceled']))

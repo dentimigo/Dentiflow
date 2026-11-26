@@ -272,10 +272,13 @@ class StripeClinicBilling
         }
 
         $paidUntil = data_get($subscription, 'items.data.0.current_period_end');
-        $workspace->stripe_paid_until = $paidUntil && data_get($subscription, 'latest_invoice.status') === 'paid'
-            && data_get($subscription, 'latest_invoice.amount_paid', 0) > 0
-            ? Carbon::createFromTimestamp($paidUntil, config('app.timezone'))
-            : null;
+        if ($paidUntil && data_get($subscription, 'latest_invoice.status') === 'paid'
+            && data_get($subscription, 'latest_invoice.amount_paid', 0) > 0) {
+            $workspace->stripe_paid_until = Carbon::createFromTimestamp($paidUntil, config('app.timezone'));
+        } elseif ($workspace->stripe_status !== 'active' || ! $workspace->stripe_cancellation_pending
+            || $workspace->isDirty('stripe_subscription_id')) {
+            $workspace->stripe_paid_until = null;
+        }
         $workspace->save();
     }
 
