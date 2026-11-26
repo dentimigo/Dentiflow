@@ -127,9 +127,20 @@ class ClinicPlanController extends Controller
             $billing->cancelRenewal($workspace);
         } catch (\Illuminate\Http\Client\HttpClientException | HttpExceptionInterface $exception) {
             report($exception);
+            $reference = match (true) {
+                $exception instanceof RequestException => 'Stripe HTTP '.$exception->response->status(),
+                $exception instanceof HttpExceptionInterface => 'DentiFlow HTTP '.$exception->getStatusCode(),
+                default => 'Conexión con Stripe',
+            };
+            if ($exception instanceof RequestException) {
+                $requestId = $exception->response->header('Request-Id');
+                if (preg_match('/^req_[A-Za-z0-9]+$/D', $requestId)) {
+                    $reference .= ' / '.$requestId;
+                }
+            }
 
             return redirect()->route('perfil')->withErrors([
-                'cancel' => 'No pudimos confirmar la cancelación con Stripe. Vuelve a intentarlo.',
+                'cancel' => 'No pudimos confirmar la cancelación con Stripe. Referencia: '.$reference,
             ], 'subscription');
         }
 

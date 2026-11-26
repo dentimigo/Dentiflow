@@ -159,11 +159,20 @@ class StripeClinicBilling
                 && $plan !== false && $this->validPrice($price, $plan), 409);
 
             if (empty($subscription['cancel_at']) && empty($subscription['cancel_at_period_end'])) {
+                $cancellation = ['cancel_at_period_end' => 'true'];
+                if ($subscription['status'] === 'trialing') {
+                    $trialEnd = $subscription['trial_end'] ?? null;
+                    abort_unless(is_int($trialEnd) && $trialEnd > now()->timestamp, 409);
+                    $cancellation = ['cancel_at' => $trialEnd, 'proration_behavior' => 'none'];
+                }
+
                 $subscription = $api->post($path, [
-                    'cancel_at_period_end' => 'true',
+                    ...$cancellation,
                     'expand' => ['latest_invoice'],
                 ])->throw()->json();
-                abort_unless($subscription['cancel_at_period_end'] ?? false, 502);
+                abort_unless(isset($cancellation['cancel_at'])
+                    ? ($subscription['cancel_at'] ?? null) === $cancellation['cancel_at']
+                    : ($subscription['cancel_at_period_end'] ?? false), 502);
             }
 
             $this->saveSubscription($workspace, $subscription, $plan);
