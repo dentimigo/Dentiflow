@@ -310,6 +310,7 @@ Route::get('/reportes/export/excel', [\App\Http\Controllers\ReportController::cl
 
 Route::get('/perfil', [\App\Http\Controllers\ProfileController::class, 'show'])->name('perfil');
 Route::post('/perfil/suscripcion', [ClinicPlanController::class, 'change'])->name('perfil.subscription.change');
+Route::post('/perfil/suscripcion/cancelar', [ClinicPlanController::class, 'cancel'])->name('perfil.subscription.cancel');
 Route::get('/perfil/editar', [\App\Http\Controllers\ProfileController::class, 'edit'])->name('perfil.edit');
 Route::get('/perfil/seguridad', [\App\Http\Controllers\ProfileController::class, 'security'])->name('perfil.security');
 Route::post('/perfil', [\App\Http\Controllers\ProfileController::class, 'update'])->name('perfil.update');

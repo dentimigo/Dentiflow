@@ -37,7 +37,7 @@ class ClinicWorkspace extends Model
 
     public function hasWorkspaceAccess(): bool
     {
-        if ($this->stripe_cancellation_pending || $this->stripe_status === 'canceled') {
+        if ($this->stripe_status === 'canceled') {
             return false;
         }
 

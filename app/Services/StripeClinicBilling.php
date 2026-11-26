@@ -140,6 +140,36 @@ class StripeClinicBilling
         return $this->stripeUrl($portal['url'], 'billing.stripe.com');
     }
 
+    public function cancelRenewal(ClinicWorkspace $workspace): void
+    {
+        DB::transaction(function () use ($workspace) {
+            $workspace = ClinicWorkspace::query()->lockForUpdate()->findOrFail($workspace->id);
+            abort_unless($workspace->stripe_subscription_id && $workspace->stripe_customer_id && $workspace->hasWorkspaceAccess(), 409);
+
+            $api = $this->api();
+            $path = 'subscriptions/'.$workspace->stripe_subscription_id;
+            $subscription = $api->get($path, ['expand' => ['latest_invoice']])->throw()->json();
+            $price = data_get($subscription, 'items.data.0.price', []);
+            $plan = array_search($price['id'] ?? null, config('stripe.prices'), true);
+            abort_unless(($subscription['id'] ?? null) === $workspace->stripe_subscription_id
+                && ($subscription['customer'] ?? null) === $workspace->stripe_customer_id
+                && ($subscription['livemode'] ?? null) === config('stripe.live')
+                && in_array($subscription['status'] ?? null, ['trialing', 'active'], true)
+                && empty($subscription['schedule'])
+                && $plan !== false && $this->validPrice($price, $plan), 409);
+
+            if (empty($subscription['cancel_at']) && empty($subscription['cancel_at_period_end'])) {
+                $subscription = $api->post($path, [
+                    'cancel_at_period_end' => 'true',
+                    'expand' => ['latest_invoice'],
+                ])->throw()->json();
+                abort_unless($subscription['cancel_at_period_end'] ?? false, 502);
+            }
+
+            $this->saveSubscription($workspace, $subscription, $plan);
+        });
+    }
+
     public function changePlan(ClinicWorkspace $workspace, string $plan): void
     {
         DB::transaction(function () use ($workspace, $plan) {

@@ -47,7 +47,22 @@
         </form>
     @endif
 
-    @if ($currentPlan && ($trialWithoutCard || ($canManage && $workspace->stripe_subscription_id)))
+    @if ($canManage && $workspace->stripe_subscription_id && $until && $workspace->hasWorkspaceAccess())
+        @if ($workspace->stripe_cancellation_pending)
+            <p class="mt-5 text-sm text-slate-700">Renovación cancelada. Conservas el acceso hasta el {{ $until->format('d/m/Y H:i') }}.</p>
+        @else
+            <form method="POST" action="{{ route('perfil.subscription.cancel') }}" class="mt-5 space-y-3 border-t border-[#ead2fb] pt-5">
+                @csrf
+                <label class="flex items-center gap-2 text-sm text-slate-700">
+                    <input type="checkbox" name="confirm_cancel" value="1" required>
+                    Confirmo que quiero cancelar la renovación. El acceso termina el {{ $until->format('d/m/Y H:i') }}.
+                </label>
+                <button class="rounded-xl border border-red-300 px-4 py-2 text-sm font-semibold text-red-700">Cancelar suscripción</button>
+            </form>
+        @endif
+    @endif
+
+    @if ($currentPlan && ! $workspace->stripe_cancellation_pending && ($trialWithoutCard || ($canManage && $workspace->stripe_subscription_id)))
         <form method="POST" action="{{ route('perfil.subscription.change') }}" class="mt-5 space-y-3 border-t border-[#ead2fb] pt-5">
             @csrf
             <label for="subscription-plan" class="block font-semibold text-slate-900">Cambiar plan</label>

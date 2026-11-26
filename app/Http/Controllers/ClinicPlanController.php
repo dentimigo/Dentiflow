@@ -115,6 +115,27 @@ class ClinicPlanController extends Controller
         }
     }
 
+    public function cancel(Request $request, StripeClinicBilling $billing)
+    {
+        $workspace = $this->workspace($request);
+        abort_unless((int) $workspace->owner_user_id === (int) $request->user()->id, 403);
+        $request->validateWithBag('subscription', ['confirm_cancel' => ['accepted']], [
+            'confirm_cancel.accepted' => 'Confirma que deseas cancelar la renovación.',
+        ]);
+
+        try {
+            $billing->cancelRenewal($workspace);
+        } catch (\Illuminate\Http\Client\HttpClientException | HttpExceptionInterface $exception) {
+            report($exception);
+
+            return redirect()->route('perfil')->withErrors([
+                'cancel' => 'No pudimos confirmar la cancelación con Stripe. Vuelve a intentarlo.',
+            ], 'subscription');
+        }
+
+        return redirect()->route('perfil')->with('subscription_status', 'La renovación quedó cancelada en Stripe.');
+    }
+
     public function change(Request $request, StripeClinicBilling $billing)
     {
         $workspace = $this->workspace($request);

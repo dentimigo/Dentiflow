@@ -165,6 +165,7 @@ class StripeClinicBillingTest extends TestCase
                 ->push(['url' => 'https://billing.stripe.com/p/session/test']),
             'api.stripe.com/v1/subscriptions/*' => Http::sequence()
                 ->push(array_replace($subscription, ['status' => 'active', 'latest_invoice' => ['status' => 'paid', 'amount_paid' => $amount]]))
+                ->push(array_replace($subscription, ['status' => 'active', 'latest_invoice' => ['status' => 'paid', 'amount_paid' => $amount]]))
                 ->push(array_replace($subscription, [
                     'status' => 'active',
                     'cancel_at_period_end' => true,
@@ -227,10 +228,13 @@ class StripeClinicBillingTest extends TestCase
         $this->assertSame('active', $clinic->fresh()->stripe_status);
         $this->assertTrue($clinic->fresh()->hasWorkspaceAccess());
 
-        $this->event('customer.subscription.updated', ['id' => 'sub_Example'])->assertNoContent();
-        $this->get(route('pacientes'))->assertRedirect(route('clinic.plan'));
-        $this->postJson(route('citas.store'))->assertForbidden();
-        $this->get(route('clinic.plan'))->assertOk()->assertSee('Gestionar cancelación en Stripe');
+        $this->post(route('perfil.subscription.cancel'), ['confirm_cancel' => '1'])
+            ->assertRedirect(route('perfil'))->assertSessionHas('subscription_status');
+        Http::assertSent(fn (Request $request) => $request->method() === 'POST'
+            && $request->url() === 'https://api.stripe.com/v1/subscriptions/sub_Example'
+            && $request['cancel_at_period_end'] === 'true');
+        $this->assertTrue($clinic->fresh()->stripe_cancellation_pending);
+        $this->get(route('pacientes'))->assertOk();
 
         $this->event('invoice.payment_failed', ['parent' => ['subscription_details' => ['subscription' => 'sub_Example']]])->assertNoContent();
         $this->get(route('reportes.export'))->assertRedirect(route('clinic.plan'));
