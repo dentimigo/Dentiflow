@@ -16,8 +16,8 @@ class StripeClinicBilling
     {
         return DB::transaction(function () use ($workspace, $plan, $ownerEmail) {
             $workspace = ClinicWorkspace::query()->lockForUpdate()->findOrFail($workspace->id);
-            $resubscribing = $workspace->stripe_status === 'canceled';
-            if ($workspace->stripe_subscription_id && ! $resubscribing) {
+            $resubscribing = in_array($workspace->stripe_status, ['canceled', 'incomplete_expired'], true);
+            if ($workspace->hasRecoverableStripeSubscription()) {
                 throw ValidationException::withMessages(['plan' => 'Gestiona tu suscripción desde el portal de Stripe.']);
             }
 
@@ -93,7 +93,7 @@ class StripeClinicBilling
             ])->throw()->json();
             $plan = data_get($session, 'metadata.plan');
             if (($session['mode'] ?? null) !== 'setup' || ($session['status'] ?? null) !== 'complete'
-                || ($session['livemode'] ?? true) || ($session['customer'] ?? null) !== $workspace->stripe_customer_id
+                || ($session['livemode'] ?? null) !== config('stripe.live') || ($session['customer'] ?? null) !== $workspace->stripe_customer_id
                 || data_get($session, 'setup_intent.status') !== 'succeeded' || ! is_string($plan)
                 || ! isset(ClinicWorkspace::TRIAL_PLANS[$plan])) {
                 return;
@@ -164,7 +164,7 @@ class StripeClinicBilling
             $item = $items[0] ?? [];
             $currentPlan = array_search(data_get($item, 'price.id'), config('stripe.prices'), true);
             abort_unless($subscription['customer'] === $workspace->stripe_customer_id
-                && ($subscription['livemode'] ?? true) === false
+                && ($subscription['livemode'] ?? null) === config('stripe.live')
                 && count($items) === 1 && ($item['quantity'] ?? null) === 1
                 && $currentPlan !== false && $this->validPrice($item['price'], $currentPlan), 409);
 
@@ -218,7 +218,7 @@ class StripeClinicBilling
             $price = $items[0]['price'] ?? [];
             $plan = array_search($price['id'] ?? null, config('stripe.prices'), true);
             if ($plan === false || count($items) !== 1 || ($items[0]['quantity'] ?? null) !== 1
-                || ! $this->validPrice($price, $plan) || ($subscription['livemode'] ?? true)) {
+                || ! $this->validPrice($price, $plan) || ($subscription['livemode'] ?? null) !== config('stripe.live')) {
                 return;
             }
 
@@ -232,6 +232,8 @@ class StripeClinicBilling
         $workspace->stripe_subscription_id = $subscription['id'];
         $workspace->stripe_customer_id = $subscription['customer'];
         $workspace->stripe_status = $subscription['status'];
+        $workspace->stripe_cancellation_pending = ! empty($subscription['cancel_at_period_end'])
+            || ! empty($subscription['cancel_at']);
         if (! empty($subscription['trial_end'])) {
             $workspace->trial_ends_at = Carbon::createFromTimestamp($subscription['trial_end'], config('app.timezone'));
         }
@@ -246,7 +248,7 @@ class StripeClinicBilling
 
     private function validPrice(array $price, string $plan): bool
     {
-        return ($price['livemode'] ?? true) === false
+        return ($price['livemode'] ?? null) === config('stripe.live')
             && ($price['currency'] ?? null) === 'mxn'
             && ($price['unit_amount'] ?? null) === ClinicWorkspace::TRIAL_PLANS[$plan]['price'] * 100
             && data_get($price, 'recurring.interval') === 'month'
@@ -263,8 +265,9 @@ class StripeClinicBilling
     private function api(): PendingRequest
     {
         $secret = (string) config('stripe.secret');
-        abort_unless(config('stripe.enabled') && Str::startsWith($secret, ['sk_test_', 'rk_test_'])
-            && Str::startsWith((string) config('stripe.webhook_secret'), 'whsec_'), 503, 'Stripe de prueba no está configurado.');
+        $prefixes = config('stripe.live') ? ['sk_live_', 'rk_live_'] : ['sk_test_', 'rk_test_'];
+        abort_unless(config('stripe.enabled') && Str::startsWith($secret, $prefixes)
+            && Str::startsWith((string) config('stripe.webhook_secret'), 'whsec_'), 503, 'Stripe no está configurado para el modo seleccionado.');
 
         return Http::asForm()->acceptJson()->withToken($secret)->baseUrl('https://api.stripe.com/v1/')
             ->withHeader('Stripe-Version', '2025-03-31.basil')->timeout(10);

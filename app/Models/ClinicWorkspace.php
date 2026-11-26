@@ -20,6 +20,7 @@ class ClinicWorkspace extends Model
         'trial_required' => 'boolean',
         'trial_ends_at' => 'immutable_datetime',
         'stripe_paid_until' => 'immutable_datetime',
+        'stripe_cancellation_pending' => 'boolean',
     ];
 
     public function owner(): BelongsTo
@@ -36,6 +37,10 @@ class ClinicWorkspace extends Model
 
     public function hasWorkspaceAccess(): bool
     {
+        if ($this->stripe_cancellation_pending || $this->stripe_status === 'canceled') {
+            return false;
+        }
+
         if ($this->stripe_subscription_id || $this->stripe_customer_id) {
             return match ($this->stripe_status) {
                 'trialing' => $this->trial_ends_at?->isFuture() === true,
@@ -45,6 +50,12 @@ class ClinicWorkspace extends Model
         }
 
         return ! $this->trial_required || $this->trial_ends_at?->isFuture() === true;
+    }
+
+    public function hasRecoverableStripeSubscription(): bool
+    {
+        return $this->stripe_subscription_id
+            && ! in_array($this->stripe_status, ['canceled', 'incomplete_expired'], true);
     }
 
     public function seatLimit(): ?int

@@ -47,7 +47,7 @@ class ResolveClinicWorkspace
             if (! $isPlanRoute && ! $workspace->hasWorkspaceAccess()) {
                 return $request->expectsJson()
                     ? response()->json([
-                        'message' => 'Activa o renueva el plan para agendar citas o hacer cambios.',
+                        'message' => 'Activa o renueva el plan para volver a usar las funciones del consultorio.',
                         'renewal_url' => route('clinic.plan'),
                     ], 403)
                     : redirect()->route('clinic.plan');

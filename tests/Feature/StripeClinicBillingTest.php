@@ -160,6 +160,11 @@ class StripeClinicBillingTest extends TestCase
             'api.stripe.com/v1/subscriptions' => Http::response($subscription),
             'api.stripe.com/v1/subscriptions/*' => Http::sequence()
                 ->push(array_replace($subscription, ['status' => 'active', 'latest_invoice' => ['status' => 'paid', 'amount_paid' => $amount]]))
+                ->push(array_replace($subscription, [
+                    'status' => 'active',
+                    'cancel_at_period_end' => true,
+                    'latest_invoice' => ['status' => 'paid', 'amount_paid' => $amount],
+                ]))
                 ->push(array_replace($subscription, ['status' => 'past_due']))
                 ->push(array_replace($subscription, ['status' => 'canceled']))
                 ->push(array_replace($subscription, [
@@ -201,13 +206,19 @@ class StripeClinicBillingTest extends TestCase
         $this->event('customer.subscription.updated', ['id' => 'sub_Example'])->assertNoContent();
         $this->assertSame('active', $clinic->fresh()->stripe_status);
         $this->assertTrue($clinic->fresh()->hasWorkspaceAccess());
+
+        $this->event('customer.subscription.updated', ['id' => 'sub_Example'])->assertNoContent();
+        $this->get(route('pacientes'))->assertRedirect(route('clinic.plan'));
+        $this->postJson(route('citas.store'))->assertForbidden();
+        $this->get(route('clinic.plan'))->assertOk()->assertSee('Gestionar cancelación en Stripe');
+
         $this->event('invoice.payment_failed', ['parent' => ['subscription_details' => ['subscription' => 'sub_Example']]])->assertNoContent();
         $this->get(route('reportes.export'))->assertRedirect(route('clinic.plan'));
         $this->get(route('citas.create'))->assertRedirect(route('clinic.plan'));
         $this->postJson(route('citas.store'))->assertForbidden()
             ->assertJsonPath('renewal_url', route('clinic.plan'));
         $this->get(route('clinic.plan'))->assertOk()
-            ->assertSee('Renueva tu plan')->assertSee('Actualizar tarjeta de débito');
+            ->assertSee('Renueva tu plan')->assertSee('Actualizar tarjeta de débito o crédito');
 
         $this->event('customer.subscription.deleted', ['id' => 'sub_Example'])->assertNoContent();
         $this->post(route('citas.store'))->assertRedirect(route('clinic.plan'));
