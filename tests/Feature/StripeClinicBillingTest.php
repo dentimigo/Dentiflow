@@ -242,7 +242,7 @@ class StripeClinicBillingTest extends TestCase
             ->assertRedirect(route('perfil'))->assertSessionHas('subscription_status');
         Http::assertSent(fn (Request $request) => $request->method() === 'POST'
             && $request->url() === 'https://api.stripe.com/v1/subscriptions/sub_Example'
-            && $request['cancel_at_period_end'] === 'true');
+            && ($request['cancel_at_period_end'] ?? null) === 'true');
         $this->assertTrue($clinic->fresh()->stripe_cancellation_pending);
         $this->get(route('pacientes'))->assertOk();
 
